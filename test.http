@@ -4,5 +4,5 @@ Content-Type: application/json
 {
   "user_id": 888,
   "product_id": 1,
-  "count": 1000
+  "count": 10
 }

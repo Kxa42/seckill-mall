@@ -2,16 +2,16 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"log"
 	"math/rand"
 	"net"
 	"time"
 
+	amqp "github.com/rabbitmq/amqp091-go"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
-	"gorm.io/driver/mysql"
-	"gorm.io/gorm"
 
 	clientv3 "go.etcd.io/etcd/client/v3"
 	"go.etcd.io/etcd/client/v3/naming/endpoints"
@@ -26,33 +26,30 @@ const (
 	SERVICE_ADDR = "127.0.0.1:50052"
 
 	PRODUCT_SERVICE_NAME = "etcd:///seckill/product"
+	MQ_URL               = "amqp://guest:guest@localhost:5672/"
+	MQ_QUEUE_NAME        = "seckill_order_queue"
 )
 
 // 数据库模型
-type Order struct {
-	ID        int64     `gorm:"primaryKey"`
-	OrderID   string    `gorm:"type:varchar(64)"`
-	UserID    int64     `gorm:"type:bigint"`
-	ProductID int64     `gorm:"type:bigint"`
-	Amount    float32   `gorm:"type:decimal(10,2)"`
-	Status    int32     `gorm:"type:int"`
-	CreatedAt time.Time `gorm:"autoCreateTime"`
+type OrderMessage struct {
+	OrderID   string  `json:"order_id"`
+	UserID    int64   `json:"user_id"`
+	ProductID int64   `json:"product_id"`
+	Amount    float32 `json:"amount"`
 }
 
-func (Order) TableName() string { return "orders" }
-
-var db *gorm.DB
 var productClient pb.ProductServiceClient
+var mqChannel *amqp.Channel //全局MQ通道
 
 type server struct {
 	pb.UnimplementedOrderServiceServer
 }
 
-// CreateOrder 下单逻辑 (保持不变)
+// CreateOrder 下单逻辑 (异步版)
 func (s *server) CreateOrder(ctx context.Context, req *pb.CreateOrderRequest) (*pb.CreateOrderResponse, error) {
 	fmt.Printf("收到下单请求，用户: %d, 商品: %d\n", req.UserId, req.ProductId)
 
-	// 1. 扣减 Redis 库存
+	//扣减 Redis 库存作为防超卖第一道防线
 	deductResp, err := productClient.DeductStock(context.Background(), &pb.DeductStockRequest{
 		ProductId: req.ProductId,
 		Count:     req.Count,
@@ -69,7 +66,7 @@ func (s *server) CreateOrder(ctx context.Context, req *pb.CreateOrderRequest) (*
 		}, nil
 	}
 
-	// 2. 查价格、入库
+	// 查价格,计算总金额
 	pResp, err := productClient.GetProduct(context.Background(), &pb.ProductRequest{ProductId: req.ProductId})
 	if err != nil {
 		return nil, err
@@ -78,26 +75,70 @@ func (s *server) CreateOrder(ctx context.Context, req *pb.CreateOrderRequest) (*
 	totalAmount := pResp.Price * float32(req.Count)
 	orderID := fmt.Sprintf("%d%d", time.Now().UnixNano(), rand.Intn(1000))
 
-	order := Order{
+	orderMsg := OrderMessage{
 		OrderID:   orderID,
 		UserID:    req.UserId,
 		ProductID: req.ProductId,
 		Amount:    totalAmount,
-		Status:    1,
 	}
 
-	if err := db.Create(&order).Error; err != nil {
-		return nil, fmt.Errorf("创建订单失败: %v", err)
+	body, _ := json.Marshal(orderMsg)
+
+	// 发送消息到 RabbitMQ
+	err = mqChannel.PublishWithContext(ctx,
+		"",            //默认交换机
+		MQ_QUEUE_NAME, //队列名
+		false,
+		false,
+		amqp.Publishing{
+			ContentType: "application/json",
+			Body:        body,
+		},
+	)
+
+	//发MQ失败应该回滚Redis库存，这里先打日志
+	if err != nil {
+		log.Printf("发送MQ失败: %v", err)
+		return nil, fmt.Errorf("系统繁忙，请稍后重试")
 	}
+
+	fmt.Printf("✅ 下单请求已发送到MQ，订单ID: %s\n", orderID)
 
 	return &pb.CreateOrderResponse{
 		OrderId: orderID,
 		Success: true,
-		Message: "抢购成功",
+		Message: "排队中，请稍后查询结果",
 	}, nil
 }
 
-// === 初始化 Product Client ===
+// 初始化RabbitMQ连接
+func initMQ() {
+	conn, err := amqp.Dial(MQ_URL)
+	if err != nil {
+		log.Fatalf("连接RabbitMQ失败: %v", err)
+	}
+
+	mqChannel, err = conn.Channel()
+	if err != nil {
+		log.Fatalf("创建MQ通道失败: %v", err)
+	}
+
+	_, err = mqChannel.QueueDeclare(
+		MQ_QUEUE_NAME,
+		true, //持久化确保重启后队列还在
+		false,
+		false,
+		false,
+		nil,
+	)
+	if err != nil {
+		log.Fatalf("声明队列失败: %v", err)
+	}
+
+	fmt.Println("已连接到 RabbitMQ (MQ Ready)")
+}
+
+// 初始化Product Client
 func initProductClient() {
 	etcdAddr := config.Conf.Etcd.Addr
 
@@ -144,20 +185,11 @@ func registerEtcd() {
 	fmt.Printf("✅ 订单服务已注册到 Etcd: %s\n", SERVICE_ADDR)
 }
 
-func initDB() {
-	dsn := config.Conf.MySQL.DSN
-	var err error
-	db, err = gorm.Open(mysql.Open(dsn), &gorm.Config{})
-	if err != nil {
-		log.Fatal(err)
-	}
-}
-
 func main() {
 	// 1. 最先加载配置
 	config.InitConfig()
 
-	initDB()
+	initMQ()
 	initProductClient()
 	registerEtcd()
 
