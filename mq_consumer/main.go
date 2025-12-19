@@ -11,6 +11,7 @@ import (
 	"gorm.io/gorm"
 
 	"seckill-mall/common/config"
+	"strings"
 )
 
 type OrderMessage struct {
@@ -86,7 +87,7 @@ func main() {
 		for d := range msgs {
 			var msg OrderMessage
 			json.Unmarshal(d.Body, &msg)
-			fmt.Printf("接收到订单: %s | 金额：%。2f | 开始落库...", msg.OrderID, msg.Amount)
+			fmt.Printf("接收到订单: %s | 金额：%.2f | 开始落库...", msg.OrderID, msg.Amount)
 
 			order := Order{
 				OrderID:   msg.OrderID,
@@ -99,10 +100,26 @@ func main() {
 			//模拟慢速数据库写入
 			time.Sleep(50 * time.Millisecond) // 模拟落库延迟
 
-			if err := db.Create(&order).Error; err != nil {
-				log.Printf("订单落库失败: %v", err) //后续的Nack暂缓实施
+			err = db.Create(&order).Error
+			if err != nil {
+				//引入判断是不是“重复主键”错误
+				if strings.Contains(err.Error(), "Duplicate entry") {
+					fmt.Println("订单 %s 已存在，忽略重复消费", order.OrderID)
+					//任务已完成，返回Ack告知RabbitMQ
+					d.Ack(false)
+				} else {
+					//可能的无网络或数据库挂了
+					log.Printf("订单落库失败（暂存死信/重试）: %v", err)
+					//重试次数限制暂缓实施
+					d.Nack(false, true)
+				}
 			} else {
 				fmt.Println("订单落库成功")
+
+				//临时测试
+				//log.Println("模拟网络延迟，还没发Ack...")
+				//time.Sleep(10 * time.Second)
+
 				d.Ack(false)
 			}
 		}
