@@ -1,5 +1,6 @@
 server:
   name: "seckill-mall"
+  port: "your_port_here"
   mode: "debug"
 
 mysql:

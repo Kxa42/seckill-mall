@@ -14,20 +14,26 @@ import (
 	clientv3 "go.etcd.io/etcd/client/v3"
 	resolver "go.etcd.io/etcd/client/v3/naming/resolver"
 
-	// ✅ 1. 必须引入配置包
 	"seckill-mall/common/config"
 	"seckill-mall/common/pb"
+	"seckill-mall/common/tracer"
+
+	// ✅ 1. 必须引入配置包
+	"go.opentelemetry.io/contrib/instrumentation/github.com/gin-gonic/gin/otelgin"
+	"go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc"
 )
 
 func main() {
-	// ✅ 2. 第一件事：必须先加载配置！
-	// 如果不加这行，下面的 config.Conf 都是空的，程序直接崩
+	//初始化链路追踪
+	shutdown := tracer.InitTracer("api-gateway", "localhost:4318")
+	defer shutdown(context.Background())
+	// 先加载配置
 	config.InitConfig()
 
-	// ✅ 3. 使用配置里的 Etcd 地址
+	// 使用配置里的 Etcd 地址
 	etcdAddr := config.Conf.Etcd.Addr
 
-	// 1. 初始化 Etcd 连接
+	// 初始化 Etcd 连接
 	cli, err := clientv3.New(clientv3.Config{
 		Endpoints:   []string{etcdAddr}, // 使用配置变量
 		DialTimeout: 5 * time.Second,
@@ -40,10 +46,11 @@ func main() {
 		log.Fatalf("创建解析器失败: %v", err)
 	}
 
-	// 2. 连接【商品服务】
+	// 连接【商品服务】
 	connProduct, err := grpc.Dial(
 		"etcd:///seckill/product",
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
+		grpc.WithStatsHandler(otelgrpc.NewClientHandler()),
 		grpc.WithResolvers(etcdResolver),
 		grpc.WithDefaultServiceConfig(`{"loadBalancingPolicy":"round_robin"}`),
 	)
@@ -52,10 +59,11 @@ func main() {
 	}
 	productClient := pb.NewProductServiceClient(connProduct)
 
-	// 3. 连接【订单服务】
+	// 连接【订单服务】
 	connOrder, err := grpc.Dial(
 		"etcd:///seckill/order",
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
+		grpc.WithStatsHandler(otelgrpc.NewClientHandler()),
 		grpc.WithResolvers(etcdResolver),
 		grpc.WithDefaultServiceConfig(`{"loadBalancingPolicy":"round_robin"}`),
 	)
@@ -64,13 +72,16 @@ func main() {
 	}
 	orderClient := pb.NewOrderServiceClient(connOrder)
 
-	// 4. 启动 Gin
+	// 启动 Gin
 	r := gin.Default()
+
+	//添加Gin中间件，自动记录http请求
+	r.Use(otelgin.Middleware("api-gateway"))
 
 	// 接口 1: 查询商品
 	r.GET("/product/:id", func(c *gin.Context) {
 		id, _ := strconv.ParseInt(c.Param("id"), 10, 64)
-		resp, err := productClient.GetProduct(context.Background(), &pb.ProductRequest{ProductId: id})
+		resp, err := productClient.GetProduct(c.Request.Context(), &pb.ProductRequest{ProductId: id})
 		if err != nil {
 			c.JSON(500, gin.H{"error": err.Error()})
 			return
@@ -90,7 +101,7 @@ func main() {
 			return
 		}
 
-		resp, err := orderClient.CreateOrder(context.Background(), &pb.CreateOrderRequest{
+		resp, err := orderClient.CreateOrder(c.Request.Context(), &pb.CreateOrderRequest{
 			UserId:    req.UserID,
 			ProductId: req.ProductID,
 			Count:     req.Count,

@@ -8,6 +8,8 @@ import (
 	"seckill-mall/common/config"
 	"strconv"
 
+	"github.com/spf13/viper"
+	"go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc"
 	"google.golang.org/grpc"
 	"gorm.io/driver/mysql"
 	"gorm.io/gorm"
@@ -19,15 +21,15 @@ import (
 
 	// 引入 Redis 库
 	"github.com/redis/go-redis/v9"
+
+	"seckill-mall/common/tracer"
 )
 
 const (
-	ETCD_ADDR    = "127.0.0.1:2379"
 	SERVICE_NAME = "seckill/product"
-	SERVICE_ADDR = "127.0.0.1:50051"
 )
 
-// === 1. 定义 Lua 脚本 (核心) ===
+// 定义 Lua 脚本
 // KEYS[1]: 商品的 Redis Key (例如 product:stock:1)
 // ARGV[1]: 要扣减的数量
 const LUA_SCRIPT = `
@@ -51,10 +53,9 @@ else
 end
 `
 
-// ... (Product 结构体, initRedis, initDB, preheatStock 等保持不变) ...
-
-// === 2. 实现 DeductStock 接口 ===
+// 实现 DeductStock 接口
 func (s *server) DeductStock(ctx context.Context, req *pb.DeductStockRequest) (*pb.DeductStockResponse, error) {
+	fmt.Printf("[Trace]扣减库存：商品%d, 数量%d\n", req.ProductId, req.Count)
 	// 拼接 Key: product:stock:1
 	key := "product:stock:" + strconv.FormatInt(req.ProductId, 10)
 
@@ -77,7 +78,7 @@ func (s *server) DeductStock(ctx context.Context, req *pb.DeductStockRequest) (*
 	return &pb.DeductStockResponse{Success: true, Message: "扣减成功"}, nil
 }
 
-// === 数据库模型 ===
+// 数据库模型
 type Product struct {
 	ID          int64   `gorm:"primaryKey"`
 	Name        string  `gorm:"type:varchar(255)"`
@@ -97,7 +98,8 @@ type server struct {
 
 // GetProduct 实现
 func (s *server) GetProduct(ctx context.Context, req *pb.ProductRequest) (*pb.ProductResponse, error) {
-	// ... 这里保持不变 ...
+	fmt.Printf("[Trace]查询商品：%d\n", req.ProductId)
+
 	var product Product
 	if err := db.First(&product, req.ProductId).Error; err != nil {
 		return nil, err
@@ -107,7 +109,7 @@ func (s *server) GetProduct(ctx context.Context, req *pb.ProductRequest) (*pb.Pr
 	}, nil
 }
 
-// === 新增：初始化 Redis ===
+// 初始化 Redis
 func initRedis() {
 	rdb = redis.NewClient(&redis.Options{
 		Addr:     config.Conf.Redis.Addr,
@@ -122,8 +124,8 @@ func initRedis() {
 	fmt.Println("Redis 连接成功！")
 }
 
-// === 新增：库存预热 (把 MySQL 的库存同步到 Redis) ===
-// 实际生产中，这个通常通过后台管理系统触发，这里我们简化为启动时自动加载
+// 新增：预热库存到 Redis
+// 本来通常通过后台管理系统触发，这里简化为启动时自动加载
 func preheatStock() {
 	var products []Product
 	db.Find(&products) // 查出所有商品
@@ -132,7 +134,7 @@ func preheatStock() {
 		key := "product:stock:" + strconv.FormatInt(p.ID, 10)
 
 		// SetNX: 如果 Key 不存在才设置 (防止重启服务覆盖了已经扣减的库存)
-		// 这里的 value 就是库存数 (例如 100)
+		// 这里的 value 就是库存数
 		err := rdb.SetNX(context.Background(), key, p.Stock, 0).Err()
 		if err != nil {
 			fmt.Printf("预热库存失败 %d: %v\n", p.ID, err)
@@ -142,22 +144,22 @@ func preheatStock() {
 	}
 }
 
-// ... RegisterEtcd 和 initDB 函数保持不变 (请保留它们！) ...
-// 为了篇幅，我这里简写了，请务必保留你原来的 RegisterEtcd 和 initDB 代码！
+func RegisterEtcd(port string) {
+	etcdAddr := config.Conf.Etcd.Addr
+	myAddr := "127.0.0.1:" + port
 
-// 复制一份之前的 RegisterEtcd 和 initDB 放在这里...
-func RegisterEtcd() {
-	// ... 原样保留 ...
-	cli, _ := clientv3.New(clientv3.Config{Endpoints: []string{config.Conf.Etcd.Addr}})
+	cli, _ := clientv3.New(clientv3.Config{Endpoints: []string{etcdAddr}})
 	em, _ := endpoints.NewManager(cli, SERVICE_NAME)
 	lease, _ := cli.Grant(context.TODO(), 10)
-	em.AddEndpoint(context.TODO(), SERVICE_NAME+"/"+SERVICE_ADDR, endpoints.Endpoint{Addr: SERVICE_ADDR}, clientv3.WithLease(lease.ID))
+
+	em.AddEndpoint(context.TODO(), SERVICE_NAME+"/"+myAddr, endpoints.Endpoint{Addr: myAddr}, clientv3.WithLease(lease.ID))
+
 	ch, _ := cli.KeepAlive(context.TODO(), lease.ID)
 	go func() {
 		for range ch {
 		}
 	}()
-	fmt.Printf("✅ 服务已注册到 Etcd\n")
+	fmt.Printf("✅ 服务已注册到 Etcd: %s\n", myAddr)
 }
 
 func initDB() {
@@ -171,18 +173,33 @@ func initDB() {
 }
 
 func main() {
+	shutdown := tracer.InitTracer("product-service", "localhost:4318")
+	defer shutdown(context.Background())
 	config.InitConfig()
+	//获取端口
+	port := viper.GetString("server.product_port")
+	if port == "" {
+		port = "50051"
+	}
+
 	initDB()
 	initRedis()    // 1. 连 Redis
 	preheatStock() // 2. 预热库存
-	RegisterEtcd()
+	RegisterEtcd(port)
 
-	lis, err := net.Listen("tcp", ":50051")
+	lis, err := net.Listen("tcp", ":"+port)
 	if err != nil {
-		log.Fatal(err)
+		log.Fatalf("监听失败：%v", err)
 	}
-	s := grpc.NewServer()
+	s := grpc.NewServer(
+		grpc.StatsHandler(otelgrpc.NewServerHandler()),
+	)
+
 	pb.RegisterProductServiceServer(s, &server{})
+
 	fmt.Println("=== 商品微服务 (Redis版) 已启动 ===")
-	s.Serve(lis)
+
+	if err := s.Serve(lis); err != nil {
+		log.Fatalf("服务启动失败：%v", err)
+	}
 }

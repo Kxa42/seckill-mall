@@ -10,6 +10,7 @@ import (
 	"time"
 
 	amqp "github.com/rabbitmq/amqp091-go"
+	"github.com/spf13/viper"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 
@@ -19,11 +20,13 @@ import (
 
 	"seckill-mall/common/config"
 	"seckill-mall/common/pb"
+	"seckill-mall/common/tracer"
+
+	otelgrpc "go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc"
 )
 
 const (
 	SERVICE_NAME = "seckill/order"
-	SERVICE_ADDR = "127.0.0.1:50052"
 
 	PRODUCT_SERVICE_NAME = "etcd:///seckill/product"
 	MQ_URL               = "amqp://guest:guest@localhost:5672/"
@@ -50,7 +53,7 @@ func (s *server) CreateOrder(ctx context.Context, req *pb.CreateOrderRequest) (*
 	fmt.Printf("收到下单请求，用户: %d, 商品: %d\n", req.UserId, req.ProductId)
 
 	//扣减 Redis 库存作为防超卖第一道防线
-	deductResp, err := productClient.DeductStock(context.Background(), &pb.DeductStockRequest{
+	deductResp, err := productClient.DeductStock(ctx, &pb.DeductStockRequest{
 		ProductId: req.ProductId,
 		Count:     req.Count,
 	})
@@ -59,7 +62,7 @@ func (s *server) CreateOrder(ctx context.Context, req *pb.CreateOrderRequest) (*
 	}
 
 	if !deductResp.Success {
-		fmt.Printf("❌ 库存不足，秒杀失败\n")
+		fmt.Printf("库存不足，秒杀失败\n")
 		return &pb.CreateOrderResponse{
 			Success: false,
 			Message: deductResp.Message,
@@ -67,7 +70,7 @@ func (s *server) CreateOrder(ctx context.Context, req *pb.CreateOrderRequest) (*
 	}
 
 	// 查价格,计算总金额
-	pResp, err := productClient.GetProduct(context.Background(), &pb.ProductRequest{ProductId: req.ProductId})
+	pResp, err := productClient.GetProduct(ctx, &pb.ProductRequest{ProductId: req.ProductId})
 	if err != nil {
 		return nil, err
 	}
@@ -102,7 +105,7 @@ func (s *server) CreateOrder(ctx context.Context, req *pb.CreateOrderRequest) (*
 		return nil, fmt.Errorf("系统繁忙，请稍后重试")
 	}
 
-	fmt.Printf("✅ 下单请求已发送到MQ，订单ID: %s\n", orderID)
+	fmt.Printf("下单请求已发送到MQ，订单ID: %s\n", orderID)
 
 	return &pb.CreateOrderResponse{
 		OrderId: orderID,
@@ -159,6 +162,9 @@ func initProductClient() {
 		PRODUCT_SERVICE_NAME,
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
 		grpc.WithResolvers(etcdResolver),
+
+		grpc.WithStatsHandler(otelgrpc.NewClientHandler()),
+
 		grpc.WithDefaultServiceConfig(`{"loadBalancingPolicy":"round_robin"}`),
 	)
 	if err != nil {
@@ -166,39 +172,56 @@ func initProductClient() {
 	}
 
 	productClient = pb.NewProductServiceClient(conn)
-	fmt.Println("✅ 已连接到商品服务 (RPC Client Ready)")
+	fmt.Println("已连接到商品服务 (RPC Client Ready)")
 }
 
 // === 注册自己到 Etcd ===
-func registerEtcd() {
+func registerEtcd(serviceAddr string) {
 	etcdAddr := config.Conf.Etcd.Addr
 
 	cli, _ := clientv3.New(clientv3.Config{Endpoints: []string{etcdAddr}})
 	em, _ := endpoints.NewManager(cli, SERVICE_NAME)
 	lease, _ := cli.Grant(context.TODO(), 10)
-	em.AddEndpoint(context.TODO(), SERVICE_NAME+"/"+SERVICE_ADDR, endpoints.Endpoint{Addr: SERVICE_ADDR}, clientv3.WithLease(lease.ID))
+
+	em.AddEndpoint(context.TODO(), SERVICE_NAME+"/"+serviceAddr, endpoints.Endpoint{Addr: serviceAddr}, clientv3.WithLease(lease.ID))
+
 	ch, _ := cli.KeepAlive(context.TODO(), lease.ID)
 	go func() {
 		for range ch {
 		}
 	}()
-	fmt.Printf("✅ 订单服务已注册到 Etcd: %s\n", SERVICE_ADDR)
+	fmt.Printf("✅ 订单服务已注册到 Etcd: %s\n", serviceAddr)
 }
 
 func main() {
-	// 1. 最先加载配置
+	//初始化链路追踪
+	shutdown := tracer.InitTracer("order-service", "localhost:4318")
+	defer shutdown(context.Background())
+
+	//最先加载配置
 	config.InitConfig()
+
+	port := viper.GetString("server.port")
+	if port == "" {
+		port = "50052"
+		log.Println("配置文件未指定端口，使用默认端口 50052")
+	}
+	//最好使用宿主机真实IP地址，避免容器重启后地址变化导致注册失败
+	myAddr := "127.0.0.1:" + port
 
 	initMQ()
 	initProductClient()
-	registerEtcd()
+	registerEtcd(myAddr)
 
-	lis, err := net.Listen("tcp", ":50052")
+	lis, err := net.Listen("tcp", ":"+port)
 	if err != nil {
-		log.Fatal(err)
+		log.Fatalf("无法监听端口 %s: %v", port, err)
 	}
 
-	s := grpc.NewServer()
+	//创建gRPC服务器时添加拦截器
+	s := grpc.NewServer(
+		grpc.StatsHandler(otelgrpc.NewServerHandler()),
+	)
 	pb.RegisterOrderServiceServer(s, &server{})
 
 	fmt.Println("=== 订单微服务已启动 (Port: 50052) ===")
