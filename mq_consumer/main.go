@@ -14,6 +14,75 @@ import (
 	"strings"
 )
 
+const (
+	MQ_URL         = "amqp://guest:guest@localhost:5672/"
+	OrderQueue     = "orders"       //正常队列
+	DeadExchange   = "dlx_exchange" //死信交换机
+	DeadQueue      = "dead_queue"   //死信队列
+	DeadRoutingKey = "dead_key"     //识别码
+)
+
+func setupQueue(ch *amqp.Channel) {
+	//声明死信交换机
+	err := ch.ExchangeDeclare(
+		DeadExchange,
+		"direct",
+		true,
+		false,
+		false,
+		false,
+		nil,
+	)
+	if err != nil {
+		log.Fatalf("无法声明死信交换机： %v", err)
+	}
+
+	//声明死信队列
+	_, err = ch.QueueDeclare(
+		DeadQueue,
+		true,
+		false,
+		false,
+		false,
+		nil,
+	)
+	if err != nil {
+		log.Fatalf("无法声明死信队列： %v", err)
+	}
+
+	//绑定死信队列到死信交换机
+	err = ch.QueueBind(
+		DeadQueue,
+		DeadRoutingKey,
+		DeadExchange,
+		false,
+		nil,
+	)
+	if err != nil {
+		log.Fatalf("无法绑定死信队列： %v", err)
+	}
+
+	//声明主队列，并设置死信交换机参数
+	args := amqp.Table{
+		"x-dead-letter-exchange":    DeadExchange,   //指定死信交换机
+		"x-dead-letter-routing-key": DeadRoutingKey, //指定死信路由键
+	}
+
+	_, err = ch.QueueDeclare(
+		OrderQueue,
+		true,
+		false,
+		false,
+		false,
+		args,
+	)
+	if err != nil {
+		log.Fatalf("无法声明主队列： %v", err)
+	}
+
+	log.Printf("RabbitMQ 队列和交换机设置完成")
+}
+
 type OrderMessage struct {
 	OrderID   string  `json:"order_id"`
 	UserID    int64   `json:"user_id"`
@@ -67,6 +136,7 @@ func main() {
 	}
 
 	ch.Qos(1, 0, false)
+	setupQueue(ch)
 	msgs, err := ch.Consume(
 		q.Name,
 		"",
@@ -111,7 +181,7 @@ func main() {
 					//可能的无网络或数据库挂了
 					log.Printf("订单落库失败（暂存死信/重试）: %v", err)
 					//重试次数限制暂缓实施
-					d.Nack(false, true)
+					d.Nack(false, false)
 				}
 			} else {
 				fmt.Println("订单落库成功")
