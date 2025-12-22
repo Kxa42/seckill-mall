@@ -17,7 +17,6 @@ import (
 const (
 	MQ_URL = "amqp://guest:guest@localhost:5672/"
 
-	// 1. 必须和生产者(Order Service)里的队列名完全一致！
 	OrderQueue = "seckill_order_queue"
 
 	DeadExchange   = "dlx_exchange" // 死信交换机
