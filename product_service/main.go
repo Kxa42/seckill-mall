@@ -33,49 +33,75 @@ const (
 // KEYS[1]: 商品的 Redis Key (例如 product:stock:1)
 // ARGV[1]: 要扣减的数量
 const LUA_SCRIPT = `
-local key = KEYS[1]
-local change = tonumber(ARGV[1])
-
--- 获取当前库存
-local stock = tonumber(redis.call('get', key))
-
--- 如果库存还没预热，直接返回错误
-if not stock then
-  return -1
+-- 商品Key不存在（未预热/错误ID）
+if redis.call("EXISTS", KEYS[1]) == 0 then
+	return 0
 end
 
--- 如果库存足够，就扣减
-if stock >= change then
-  redis.call('DECRBY', key, change)
-  return 1 -- 成功
-else
-  return 0 -- 库存不足
+local stock = tonumber(redis.call("GET", KEYS[1]))
+local count = tonumber(ARGV[1])
+
+--库存不足
+if stock < count then
+	return 2
 end
+
+--扣减库存
+redis.call("decrby", KEYS[1], count)
+return 1
 `
 
-// 实现 DeductStock 接口
+// 升级 DeductStock 接口，区分库存为零与商品不存在两种情况
 func (s *server) DeductStock(ctx context.Context, req *pb.DeductStockRequest) (*pb.DeductStockResponse, error) {
 	fmt.Printf("[Trace]扣减库存：商品%d, 数量%d\n", req.ProductId, req.Count)
 	// 拼接 Key: product:stock:1
 	key := "product:stock:" + strconv.FormatInt(req.ProductId, 10)
 
 	// 执行 Lua 脚本
-	// Eval(ctx, 脚本, Key列表, 参数列表)
 	val, err := rdb.Eval(ctx, LUA_SCRIPT, []string{key}, req.Count).Int()
 
 	if err != nil {
-		return &pb.DeductStockResponse{Success: false, Message: "Redis 错误: " + err.Error()}, nil
+		log.Printf("❌ Redis执行异常: %v", err)
+		return nil, err
 	}
 
-	if val == -1 {
-		return &pb.DeductStockResponse{Success: false, Message: "商品未预热/不存在"}, nil
+	// 根据 Lua 返回的状态码进行精准处理
+	switch val {
+	case 0: // 商品不存在
+		log.Printf("拒绝扣减：商品 %d 未预热或不存在", req.ProductId)
+		return &pb.DeductStockResponse{
+			Success: false,
+			Message: "商品不存在或未上架", //给出明确的错误提示
+		}, nil
+	case 2: // 库存不足
+		log.Printf("拒绝扣减：商品 %d 库存不足", req.ProductId)
+		return &pb.DeductStockResponse{
+			Success: false,
+			Message: "库存不足",
+		}, nil
+	case 1: // 成功
+		fmt.Printf("扣减成功：商品 %d \n", req.ProductId)
+		return &pb.DeductStockResponse{Success: true, Message: "扣减成功"}, nil
+	default:
+		return &pb.DeductStockResponse{Success: false, Message: "未知错误"}, nil
 	}
-	if val == 0 {
-		return &pb.DeductStockResponse{Success: false, Message: "库存不足"}, nil
+}
+
+// 实现 RollbackStock 接口
+func (s *server) RollbackStock(ctx context.Context, req *pb.DeductStockRequest) (*pb.DeductStockResponse, error) {
+	fmt.Printf("[Rollback]收到回滚请求：商品%d, 数量%d\n", req.ProductId, req.Count)
+
+	key := "product:stock:" + strconv.FormatInt(req.ProductId, 10)
+
+	//使用Redis的INCRBY原子操作回滚库存
+	err := rdb.IncrBy(ctx, key, int64(req.Count)).Err()
+	if err != nil {
+		fmt.Printf("X! 回滚失败，CRITICAL ERROR：%v\n", err)
+		return &pb.DeductStockResponse{Success: false, Message: "回滚失败: " + err.Error()}, nil
 	}
 
-	fmt.Printf("⚡ 秒杀成功！扣减 Redis 库存，商品: %d, 数量: %d\n", req.ProductId, req.Count)
-	return &pb.DeductStockResponse{Success: true, Message: "扣减成功"}, nil
+	fmt.Printf("回滚成功，库存已恢复\n")
+	return &pb.DeductStockResponse{Success: true, Message: "回滚成功"}, nil
 }
 
 // 数据库模型

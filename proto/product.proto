@@ -27,6 +27,8 @@ message DeductStockResponse {
 
 service ProductService {
   rpc GetProduct(ProductRequest) returns (ProductResponse);
-  // === 新增接口 ===
   rpc DeductStock(DeductStockRequest) returns (DeductStockResponse);
+
+  //回滚库存接口
+  rpc RollbackStock(DeductStockRequest) returns (DeductStockResponse);
 }

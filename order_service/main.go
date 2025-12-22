@@ -103,7 +103,23 @@ func (s *server) CreateOrder(ctx context.Context, req *pb.CreateOrderRequest) (*
 
 	//发MQ失败应该回滚Redis库存，这里先打日志
 	if err != nil {
-		log.Printf("发送MQ失败: %v", err)
+		log.Printf("发送MQ失败: %v，正在执行回滚...", err)
+
+		//使用新Context避免因超时导致回滚被取消
+		rollbackCtx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+		defer cancel()
+
+		_, errRb := productClient.RollbackStock(rollbackCtx, &pb.DeductStockRequest{
+			ProductId: req.ProductId,
+			Count:     req.Count,
+		})
+
+		if errRb != nil {
+			log.Printf("X! MQ发送失败且回滚库存失败，请人工介入，CRITICAL ERROR: %v", errRb)
+		} else {
+			log.Printf("库存回滚成功")
+		}
+		
 		return nil, fmt.Errorf("系统繁忙，请稍后重试")
 	}
 

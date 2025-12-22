@@ -250,11 +250,12 @@ const file_proto_product_proto_rawDesc = "" +
 	"\x05count\x18\x02 \x01(\x05R\x05count\"I\n" +
 	"\x13DeductStockResponse\x12\x18\n" +
 	"\asuccess\x18\x01 \x01(\bR\asuccess\x12\x18\n" +
-	"\amessage\x18\x02 \x01(\tR\amessage2\x9b\x01\n" +
+	"\amessage\x18\x02 \x01(\tR\amessage2\xe7\x01\n" +
 	"\x0eProductService\x12?\n" +
 	"\n" +
 	"GetProduct\x12\x17.product.ProductRequest\x1a\x18.product.ProductResponse\x12H\n" +
-	"\vDeductStock\x12\x1b.product.DeductStockRequest\x1a\x1c.product.DeductStockResponseB\x10Z\x0e./common/pb;pbb\x06proto3"
+	"\vDeductStock\x12\x1b.product.DeductStockRequest\x1a\x1c.product.DeductStockResponse\x12J\n" +
+	"\rRollbackStock\x12\x1b.product.DeductStockRequest\x1a\x1c.product.DeductStockResponseB\x10Z\x0e./common/pb;pbb\x06proto3"
 
 var (
 	file_proto_product_proto_rawDescOnce sync.Once
@@ -278,10 +279,12 @@ var file_proto_product_proto_goTypes = []any{
 var file_proto_product_proto_depIdxs = []int32{
 	0, // 0: product.ProductService.GetProduct:input_type -> product.ProductRequest
 	2, // 1: product.ProductService.DeductStock:input_type -> product.DeductStockRequest
-	1, // 2: product.ProductService.GetProduct:output_type -> product.ProductResponse
-	3, // 3: product.ProductService.DeductStock:output_type -> product.DeductStockResponse
-	2, // [2:4] is the sub-list for method output_type
-	0, // [0:2] is the sub-list for method input_type
+	2, // 2: product.ProductService.RollbackStock:input_type -> product.DeductStockRequest
+	1, // 3: product.ProductService.GetProduct:output_type -> product.ProductResponse
+	3, // 4: product.ProductService.DeductStock:output_type -> product.DeductStockResponse
+	3, // 5: product.ProductService.RollbackStock:output_type -> product.DeductStockResponse
+	3, // [3:6] is the sub-list for method output_type
+	0, // [0:3] is the sub-list for method input_type
 	0, // [0:0] is the sub-list for extension type_name
 	0, // [0:0] is the sub-list for extension extendee
 	0, // [0:0] is the sub-list for field type_name
