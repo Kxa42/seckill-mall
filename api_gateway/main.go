@@ -18,17 +18,47 @@ import (
 	"seckill-mall/common/pb"
 	"seckill-mall/common/tracer"
 
-	// ✅ 1. 必须引入配置包
+	"seckill-mall/api_gateway/middleware"
+
+	sentinel "github.com/alibaba/sentinel-golang/api"
+	"github.com/alibaba/sentinel-golang/core/flow"
 	"go.opentelemetry.io/contrib/instrumentation/github.com/gin-gonic/gin/otelgin"
 	"go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc"
 )
 
+func initSentinel() {
+	// 初始化 Sentinel
+	err := sentinel.InitDefault()
+	if err != nil {
+		log.Fatalf("初始化 Sentinel 失败: %v", err)
+	}
+
+	// 配置限流规则
+	_, err = flow.LoadRules([]*flow.Rule{
+		{
+			Resource:               "create_order", // 资源名称
+			TokenCalculateStrategy: flow.Direct,    //直接计数
+			ControlBehavior:        flow.Reject,    //直接拒绝
+			Threshold:              5,              // 为了测试暂定每秒允许的最大请求数为5
+			StatIntervalInMs:       1000,           // 统计周期1秒
+		},
+	})
+	if err != nil {
+		log.Fatalf("加载限流规则失败: %v", err)
+	}
+	log.Println("Sentinel限流规则已加载：create_order 每秒最大请求数 5")
+}
+
 func main() {
+	// 先加载配置
+	config.InitConfig()
+
 	//初始化链路追踪
 	shutdown := tracer.InitTracer("api-gateway", "localhost:4318")
 	defer shutdown(context.Background())
-	// 先加载配置
-	config.InitConfig()
+
+	// 初始化 Sentinel
+	initSentinel()
 
 	// 使用配置里的 Etcd 地址
 	etcdAddr := config.Conf.Etcd.Addr
@@ -90,7 +120,7 @@ func main() {
 	})
 
 	// 接口 2: 下单
-	r.POST("/order", func(c *gin.Context) {
+	r.POST("/order", middleware.SentinelLimit("create_order"), func(c *gin.Context) {
 		var req struct {
 			UserID    int64 `json:"user_id"`
 			ProductID int64 `json:"product_id"`

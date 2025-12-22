@@ -31,6 +31,8 @@ const (
 	PRODUCT_SERVICE_NAME = "etcd:///seckill/product"
 	MQ_URL               = "amqp://guest:guest@localhost:5672/"
 	MQ_QUEUE_NAME        = "seckill_order_queue"
+	DeadExchange         = "dlx_exchange" // 死信交换机
+	DeadRoutingKey       = "dead_key"
 )
 
 // 数据库模型
@@ -126,13 +128,18 @@ func initMQ() {
 		log.Fatalf("创建MQ通道失败: %v", err)
 	}
 
+	args := amqp.Table{
+		"x-dead-letter-exchange":    DeadExchange,   // 报错后发给谁？
+		"x-dead-letter-routing-key": DeadRoutingKey, // 带什么暗号发？
+	}
+
 	_, err = mqChannel.QueueDeclare(
 		MQ_QUEUE_NAME,
 		true, //持久化确保重启后队列还在
 		false,
 		false,
 		false,
-		nil,
+		args,
 	)
 	if err != nil {
 		log.Fatalf("声明队列失败: %v", err)
@@ -163,7 +170,7 @@ func initProductClient() {
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
 		grpc.WithResolvers(etcdResolver),
 
-		grpc.WithStatsHandler(otelgrpc.NewClientHandler()), 
+		grpc.WithStatsHandler(otelgrpc.NewClientHandler()),
 
 		grpc.WithDefaultServiceConfig(`{"loadBalancingPolicy":"round_robin"}`),
 	)
