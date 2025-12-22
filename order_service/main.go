@@ -163,7 +163,7 @@ func initProductClient() {
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
 		grpc.WithResolvers(etcdResolver),
 
-		grpc.WithStatsHandler(otelgrpc.NewClientHandler()),
+		grpc.WithStatsHandler(otelgrpc.NewClientHandler()), 
 
 		grpc.WithDefaultServiceConfig(`{"loadBalancingPolicy":"round_robin"}`),
 	)
