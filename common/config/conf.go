@@ -12,6 +12,7 @@ type Config struct {
 	Redis   RedisConfig   `mapstructure:"redis"`
 	Etcd    EtcdConfig    `mapstructure:"etcd"`
 	Seckill SeckillConfig `mapstructure:"seckill"`
+	JWT     JWTConfig     `mapstructure:"jwt"`
 }
 
 type ServerConfig struct {
@@ -35,6 +36,10 @@ type EtcdConfig struct {
 
 type SeckillConfig struct {
 	PurchaseLimit int64 `mapstructure:"purchase_limit"`
+}
+
+type JWTConfig struct {
+	Expire string `mapstructure:"expire"` //对应 yaml 里的 "24h"
 }
 
 // 全局配置变量

@@ -20,6 +20,8 @@ import (
 
 	"seckill-mall/api_gateway/middleware"
 
+	"seckill-mall/common/utils"
+
 	sentinel "github.com/alibaba/sentinel-golang/api"
 	"github.com/alibaba/sentinel-golang/core/flow"
 	"go.opentelemetry.io/contrib/instrumentation/github.com/gin-gonic/gin/otelgin"
@@ -108,7 +110,41 @@ func main() {
 	//添加Gin中间件，自动记录http请求
 	r.Use(otelgin.Middleware("api-gateway"))
 
-	// 接口 1: 查询商品
+	//模拟登录接口
+	r.POST("/login", func(c *gin.Context) {
+		type LoginReq struct {
+			UserID int64 `json:"user_id"`
+		}
+		var req LoginReq
+		if err := c.ShouldBind(&req); err != nil {
+			c.JSON(400, gin.H{"error": "参数错误"})
+			return
+		}
+		expireStr := config.Conf.JWT.Expire
+
+		//解析时间字符串
+		expireDuration, err := time.ParseDuration(expireStr)
+		if err != nil {
+			expireDuration = 2 * time.Hour
+		}
+
+		// 生成Token
+		token, err := utils.GenerateToken(req.UserID, expireDuration)
+
+		if err != nil {
+			c.JSON(500, gin.H{"error": "生成Token失败"})
+			return
+		}
+
+		c.JSON(200, gin.H{
+			"code":    200,
+			"message": "登录成功",
+			"token":   token,
+			"expire":  expireStr,
+		})
+	})
+
+	// 接口: 查询商品
 	r.GET("/product/:id", func(c *gin.Context) {
 		id, _ := strconv.ParseInt(c.Param("id"), 10, 64)
 		resp, err := productClient.GetProduct(c.Request.Context(), &pb.ProductRequest{ProductId: id})
@@ -119,10 +155,17 @@ func main() {
 		c.JSON(200, gin.H{"data": resp})
 	})
 
-	// 接口 2: 下单
-	r.POST("/order", middleware.SentinelLimit("create_order"), func(c *gin.Context) {
+	// 接口: 下单
+	r.POST("/order", middleware.SentinelLimit("create_order"), middleware.JWTAuth(), func(c *gin.Context) {
+
+		//从Context中获取UserID，需要将Context里的interface{}类型断言为int64
+		userID, exists := c.Get("userID")
+		if !exists {
+			c.JSON(401, gin.H{"error": "未鉴权用户"})
+			return
+		}
+
 		var req struct {
-			UserID    int64 `json:"user_id"`
 			ProductID int64 `json:"product_id"`
 			Count     int32 `json:"count"`
 		}
@@ -132,7 +175,7 @@ func main() {
 		}
 
 		resp, err := orderClient.CreateOrder(c.Request.Context(), &pb.CreateOrderRequest{
-			UserId:    req.UserID,
+			UserId:    userID.(int64),
 			ProductId: req.ProductID,
 			Count:     req.Count,
 		})
