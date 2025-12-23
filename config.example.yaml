@@ -13,3 +13,6 @@ redis:
 
 etcd:
   addr: "127.0.0.1:2379"
+
+seckill:
+  purchase_limit: 5 #配置限购件数，默认为5

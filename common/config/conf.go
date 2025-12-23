@@ -7,10 +7,11 @@ import (
 )
 
 type Config struct {
-	Server ServerConfig `mapstructure:"server"`
-	MySQL  MySQLConfig  `mapstructure:"mysql"`
-	Redis  RedisConfig  `mapstructure:"redis"`
-	Etcd   EtcdConfig   `mapstructure:"etcd"`
+	Server  ServerConfig  `mapstructure:"server"`
+	MySQL   MySQLConfig   `mapstructure:"mysql"`
+	Redis   RedisConfig   `mapstructure:"redis"`
+	Etcd    EtcdConfig    `mapstructure:"etcd"`
+	Seckill SeckillConfig `mapstructure:"seckill"`
 }
 
 type ServerConfig struct {
@@ -30,6 +31,10 @@ type RedisConfig struct {
 
 type EtcdConfig struct {
 	Addr string `mapstructure:"addr"`
+}
+
+type SeckillConfig struct {
+	PurchaseLimit int64 `mapstructure:"purchase_limit"`
 }
 
 // 全局配置变量

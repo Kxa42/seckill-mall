@@ -38,27 +38,43 @@ if redis.call("EXISTS", KEYS[1]) == 0 then
 	return 0
 end
 
-local stock = tonumber(redis.call("GET", KEYS[1]))
-local count = tonumber(ARGV[1])
+-- 重复购买
+local current_buy = tonumber(redis.call('hget', KEYS[2], ARGV[2])) or 0
+local want_buy = tonumber(ARGV[1])
+local limit = tonumber(ARGV[3])  -- 每人限购ARGV[3]件
 
---库存不足
-if stock < count then
+if current_buy + want_buy > limit then
+	return 3
+end
+
+local stock = tonumber(redis.call("GET", KEYS[1]))
+
+-- 库存不足
+if stock < want_buy then
 	return 2
 end
 
---扣减库存
-redis.call("decrby", KEYS[1], count)
+-- 扣减库存
+redis.call("decrby", KEYS[1], want_buy)
+redis.call("hincrby", KEYS[2], ARGV[2], want_buy) --记录用户购买行为
 return 1
 `
 
 // 升级 DeductStock 接口，区分库存为零与商品不存在两种情况
 func (s *server) DeductStock(ctx context.Context, req *pb.DeductStockRequest) (*pb.DeductStockResponse, error) {
-	fmt.Printf("[Trace]扣减库存：商品%d, 数量%d\n", req.ProductId, req.Count)
+	fmt.Printf("[Trace]扣减库存：用户%d, 商品%d, 数量%d\n", req.UserId, req.ProductId, req.Count)
 	// 拼接 Key: product:stock:1
-	key := "product:stock:" + strconv.FormatInt(req.ProductId, 10)
+	stockKey := "product:stock:" + strconv.FormatInt(req.ProductId, 10)
+	userSetKey := "product:users:" + strconv.FormatInt(req.ProductId, 10) //新增用户购买集合Key
+
+	PurchaseLimit := config.Conf.Seckill.PurchaseLimit // 限购数据在配置文件中设置
+
+	if PurchaseLimit <= 0 {
+		PurchaseLimit = 1 // 预防限购未设置，默认每人限购1件
+	}
 
 	// 执行 Lua 脚本
-	val, err := rdb.Eval(ctx, LUA_SCRIPT, []string{key}, req.Count).Int()
+	val, err := rdb.Eval(ctx, LUA_SCRIPT, []string{stockKey, userSetKey}, req.Count, req.UserId, PurchaseLimit).Int()
 
 	if err != nil {
 		log.Printf("❌ Redis执行异常: %v", err)
@@ -80,8 +96,14 @@ func (s *server) DeductStock(ctx context.Context, req *pb.DeductStockRequest) (*
 			Message: "库存不足",
 		}, nil
 	case 1: // 成功
-		fmt.Printf("扣减成功：商品 %d \n", req.ProductId)
+		fmt.Printf("扣减成功：用户%d买到了商品 %d \n", req.UserId, req.ProductId)
 		return &pb.DeductStockResponse{Success: true, Message: "扣减成功"}, nil
+	case 3: // 重复购买
+		log.Printf("超过限购：用户 %d 试图购买商品 %d 一共%d件，限购%d 件", req.UserId, req.ProductId, req.Count, PurchaseLimit)
+		return &pb.DeductStockResponse{
+			Success: false,
+			Message: "每人限购一件，您已购买过该商品，不能重复购买",
+		}, nil
 	default:
 		return &pb.DeductStockResponse{Success: false, Message: "未知错误"}, nil
 	}

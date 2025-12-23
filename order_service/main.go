@@ -58,6 +58,7 @@ func (s *server) CreateOrder(ctx context.Context, req *pb.CreateOrderRequest) (*
 	deductResp, err := productClient.DeductStock(ctx, &pb.DeductStockRequest{
 		ProductId: req.ProductId,
 		Count:     req.Count,
+		UserId:    req.UserId, //新增用户ID字段防止重复购买
 	})
 	if err != nil {
 		return nil, fmt.Errorf("调用商品服务失败: %v", err)
@@ -119,7 +120,7 @@ func (s *server) CreateOrder(ctx context.Context, req *pb.CreateOrderRequest) (*
 		} else {
 			log.Printf("库存回滚成功")
 		}
-		
+
 		return nil, fmt.Errorf("系统繁忙，请稍后重试")
 	}
 
