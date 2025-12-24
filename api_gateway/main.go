@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	ginprometheus "github.com/zsais/go-gin-prometheus"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 
@@ -106,6 +107,9 @@ func main() {
 
 	// 启动 Gin
 	r := gin.Default()
+
+	p := ginprometheus.NewPrometheus("gin") //添加Prometheus监控中间件
+	p.Use(r)
 
 	//添加Gin中间件，自动记录http请求
 	r.Use(otelgin.Middleware("api-gateway"))
