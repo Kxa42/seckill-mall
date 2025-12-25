@@ -42,7 +42,7 @@ func initSentinel() {
 			Resource:               "create_order", // 资源名称
 			TokenCalculateStrategy: flow.Direct,    //直接计数
 			ControlBehavior:        flow.Reject,    //直接拒绝
-			Threshold:              5,              // 为了测试暂定每秒允许的最大请求数为5
+			Threshold:              1000,           // 为了测试暂定每秒允许的最大请求数为1000
 			StatIntervalInMs:       1000,           // 统计周期1秒
 		},
 	})
@@ -54,7 +54,7 @@ func initSentinel() {
 
 func main() {
 	// 先加载配置
-	config.InitConfig()
+	config.InitConfig("gateway")
 
 	//初始化链路追踪
 	shutdown := tracer.InitTracer("api-gateway", "localhost:4318")

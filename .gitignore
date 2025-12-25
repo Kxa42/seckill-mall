@@ -15,4 +15,4 @@ redis/
 
 tmp/
 
-config.yaml
+config/product.yaml

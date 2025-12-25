@@ -16,8 +16,10 @@ type Config struct {
 }
 
 type ServerConfig struct {
-	Name string `mapstructure:"name"`
-	Mode string `mapstructure:"mode"`
+	Name        string `mapstructure:"name" yaml:"name"`
+	Mode        string `mapstructure:"mode"`
+	Port        string `mapstructure:"port" yaml:"port"`
+	MetricsPort string `mapstructure:"metrics_port"`
 }
 
 type MySQLConfig struct {
@@ -40,17 +42,20 @@ type SeckillConfig struct {
 
 type JWTConfig struct {
 	Expire string `mapstructure:"expire"` //对应 yaml 里的 "24h"
+	Secret string `mapstructure:"secret"`
 }
 
 // 全局配置变量
 var Conf *Config
 
 // InitConfig 读取配置文件
-func InitConfig() {
-	viper.SetConfigName("config")         // 文件名 (不带后缀)
-	viper.SetConfigType("yaml")           // 文件格式
-	viper.AddConfigPath(".")              // 搜索路径 (当前根目录)
+func InitConfig(filename string) {
+	viper.AddConfigPath("./config")       // 配置文件夹路径
+	viper.AddConfigPath(".")              // 搜索当前根目录
 	viper.AddConfigPath("./seckill-mall") // 防止在子目录下运行找不到
+
+	viper.SetConfigName(filename) // 动态文件名
+	viper.SetConfigType("yaml")   // 文件格式
 
 	if err := viper.ReadInConfig(); err != nil {
 		log.Fatalf("读取配置文件失败: %v", err)

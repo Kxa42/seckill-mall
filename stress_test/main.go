@@ -12,10 +12,10 @@ import (
 
 // 配置
 const (
-	BaseURL     = "http://127.0.0.1:8080"
-	Concurrency = 20 // 并发数
-	UserID      = 9527
-	ProductID   = 1
+	BaseURL       = "http://127.0.0.1:8080"
+	TotalRequests = 200 // 总共模拟多少人抢购 (想抢光100件，建议设为200或更多)
+	Concurrency   = 50  // 限制同时有多少个请求在跑(控制并发度，防止本机端口耗尽)
+	ProductID     = 1
 )
 
 type LoginResponse struct {
@@ -25,31 +25,45 @@ type LoginResponse struct {
 }
 
 func main() {
-	// 1. 先登录获取 Token
-	fmt.Println("正在登录获取 Token...")
-	token, err := login(UserID)
-	if err != nil {
-		fmt.Printf("❌ 登录失败: %v\n", err)
-		return
-	}
-	fmt.Printf("✅ 登录成功，Token长度: %d\n", len(token))
+	fmt.Printf("开始模拟压测\n")
+	fmt.Printf("总人数: %d, 并发控制: %d, 商品ID: %d\n", TotalRequests, Concurrency, ProductID)
 
-	// 2. 开始并发压测
-	fmt.Printf("🚀 开始并发压测：模拟 %d 个请求 (使用同一 Token)...\n", Concurrency)
 	var wg sync.WaitGroup
-	wg.Add(Concurrency)
+
+	// 创建一个通道来控制并发数 (Semaphore模式)
+	// 类似于环形路口，只有拿到令牌的才能进
+	limitChan := make(chan struct{}, Concurrency)
 
 	startTime := time.Now()
 
-	for i := 0; i < Concurrency; i++ {
+	// 循环 TotalRequests 次，模拟不同的人
+	for i := 0; i < TotalRequests; i++ {
+		wg.Add(1)
+
+		// 占用一个并发名额
+		limitChan <- struct{}{}
+
 		go func(idx int) {
 			defer wg.Done()
-			createOrder(idx, token)
+			defer func() { <-limitChan }() // 任务做完，释放名额
+
+			// 生成不同的 UserID (从 20000 开始，避免和之前的冲突)
+			currentUID := 20000 + idx
+
+			// 每个人都要单独登录，拿自己的 Token
+			token, err := login(currentUID)
+			if err != nil {
+				fmt.Printf("[用户 %d] 登录失败: %v\n", currentUID, err)
+				return
+			}
+
+			// 带着自己的 Token 去抢购
+			createOrder(currentUID, token)
 		}(i)
 	}
 
 	wg.Wait()
-	fmt.Printf("\n⏱️ 压测完成，总耗时: %v\n", time.Since(startTime))
+	fmt.Printf("\n压测完成，总耗时: %v\n", time.Since(startTime))
 }
 
 // 登录动作
@@ -57,7 +71,9 @@ func login(uid int) (string, error) {
 	reqBody := map[string]interface{}{"user_id": uid}
 	jsonData, _ := json.Marshal(reqBody)
 
-	resp, err := http.Post(BaseURL+"/login", "application/json", bytes.NewBuffer(jsonData))
+	// 注意：如果你的电脑跑不动太快的登录，这里可能会报错，那是正常的
+	client := &http.Client{Timeout: 5 * time.Second}
+	resp, err := client.Post(BaseURL+"/login", "application/json", bytes.NewBuffer(jsonData))
 	if err != nil {
 		return "", err
 	}
@@ -67,18 +83,17 @@ func login(uid int) (string, error) {
 
 	var res LoginResponse
 	if err := json.Unmarshal(body, &res); err != nil {
-		return "", fmt.Errorf("解析响应失败: %v", err)
+		return "", fmt.Errorf("解析响应失败")
 	}
 
 	if res.Code != 200 {
-		return "", fmt.Errorf("服务端返回错误: %s", string(body))
+		return "", fmt.Errorf("服务端错误: %s", string(body))
 	}
 	return res.Token, nil
 }
 
 // 下单动作
-func createOrder(idx int, token string) {
-	// 构造请求体 (注意：现在不需要传 user_id 了)
+func createOrder(uid int, token string) {
 	reqBody := map[string]interface{}{
 		"product_id": ProductID,
 		"count":      1,
@@ -87,7 +102,6 @@ func createOrder(idx int, token string) {
 
 	req, _ := http.NewRequest("POST", BaseURL+"/order", bytes.NewBuffer(jsonData))
 
-	// 🔑 关键点：设置 Authorization Header
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Authorization", "Bearer "+token)
 
@@ -95,18 +109,16 @@ func createOrder(idx int, token string) {
 	resp, err := client.Do(req)
 
 	if err != nil {
-		fmt.Printf("[请求 %d] 网络错误: %v\n", idx, err)
+		fmt.Printf("[用户 %d] 请求超时/错误\n", uid)
 		return
 	}
 	defer resp.Body.Close()
 
-	// 读取结果
-	body, _ := io.ReadAll(resp.Body)
+	// 简单打印结果
 	if resp.StatusCode == 200 {
-		fmt.Printf("[请求 %d] ✅ 成功: %s\n", idx, string(body))
-	} else if resp.StatusCode == 429 {
-		fmt.Printf("[请求 %d] 🔥 限流 (429): %s\n", idx, string(body))
+		// 为了控制台干净点，只打印成功的
+		fmt.Printf("[用户 %d] 抢购成功\n", uid)
 	} else {
-		fmt.Printf("[请求 %d] ❌ 失败 (%d): %s\n", idx, resp.StatusCode, string(body))
+		fmt.Printf("[用户 %d] 失败: %d\n", uid, resp.StatusCode)
 	}
 }

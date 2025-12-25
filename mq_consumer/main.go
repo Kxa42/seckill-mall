@@ -93,7 +93,7 @@ type OrderMessage struct {
 var db *gorm.DB
 
 func main() {
-	config.InitConfig()
+	config.InitConfig("mq")
 	initDB()
 
 	conn, err := amqp.Dial(MQ_URL)

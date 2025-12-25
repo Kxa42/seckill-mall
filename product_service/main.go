@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"net"
+	"net/http"
 	"seckill-mall/common/config"
 	"strconv"
 
@@ -23,6 +24,9 @@ import (
 	"github.com/redis/go-redis/v9"
 
 	"seckill-mall/common/tracer"
+
+	grpc_prometheus "github.com/grpc-ecosystem/go-grpc-prometheus"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
 
 const (
@@ -223,7 +227,7 @@ func initDB() {
 func main() {
 	shutdown := tracer.InitTracer("product-service", "localhost:4318")
 	defer shutdown(context.Background())
-	config.InitConfig()
+	config.InitConfig("product")
 	//获取端口
 	port := viper.GetString("server.product_port")
 	if port == "" {
@@ -235,15 +239,58 @@ func main() {
 	preheatStock() // 2. 预热库存
 	RegisterEtcd(port)
 
-	lis, err := net.Listen("tcp", ":"+port)
+	//新端口暴露 Prometheus
+	go func() {
+		//拼接冒号":9091"
+		metricsAddr := fmt.Sprintf(":%s", config.Conf.Server.MetricsPort)
+
+		//===新增开发环境重置接口===
+		if config.Conf.Server.Mode == "debug" {
+			fmt.Println("警告：当前为开发环境，启用重置接口 /dev/reset")
+
+			//警告：仅限开发环境使用
+			http.HandleFunc("/dev/reset", func(w http.ResponseWriter, r *http.Request) {
+				//清空Redis
+				err := rdb.FlushDB(context.Background()).Err()
+				if err != nil {
+					w.WriteHeader(http.StatusInternalServerError)
+					w.Write([]byte("清空Redis失败: " + err.Error()))
+					return
+				}
+
+				if err := db.Exec("TRUNCATE TABLE `orders`").Error; err != nil {
+					w.WriteHeader(http.StatusInternalServerError)
+					w.Write([]byte("MySQL 订单表重置失败: " + err.Error()))
+					return
+				}
+				fmt.Println("MySQL 订单表已清空")
+
+				preheatStock()
+
+				w.Write([]byte("环境已重置，Redis已清空并重新预热库存"))
+			})
+		}
+		http.Handle("/metrics", promhttp.Handler())
+		fmt.Println("商品监控服务已启动：" + metricsAddr)
+		http.ListenAndServe(metricsAddr, nil)
+	}()
+
+	grpcAddr := fmt.Sprintf(":%s", config.Conf.Server.Port)
+	lis, err := net.Listen("tcp", grpcAddr)
 	if err != nil {
 		log.Fatalf("监听失败：%v", err)
 	}
 	s := grpc.NewServer(
 		grpc.StatsHandler(otelgrpc.NewServerHandler()),
+
+		//加上prometheus监控拦截器
+		grpc.StreamInterceptor(grpc_prometheus.StreamServerInterceptor),
+		grpc.UnaryInterceptor(grpc_prometheus.UnaryServerInterceptor),
 	)
 
 	pb.RegisterProductServiceServer(s, &server{})
+
+	grpc_prometheus.Register(s)
 
 	fmt.Println("=== 商品微服务 (Redis版) 已启动 ===")
 

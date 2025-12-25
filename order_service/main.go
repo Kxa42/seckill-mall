@@ -9,6 +9,7 @@ import (
 	"net"
 	"time"
 
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 	amqp "github.com/rabbitmq/amqp091-go"
 	"github.com/spf13/viper"
 	"google.golang.org/grpc"
@@ -22,6 +23,9 @@ import (
 	"seckill-mall/common/pb"
 	"seckill-mall/common/tracer"
 
+	"net/http"
+
+	grpc_prometheus "github.com/grpc-ecosystem/go-grpc-prometheus"
 	otelgrpc "go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc"
 )
 
@@ -223,7 +227,7 @@ func main() {
 	defer shutdown(context.Background())
 
 	//最先加载配置
-	config.InitConfig()
+	config.InitConfig("order")
 
 	port := viper.GetString("server.port")
 	if port == "" {
@@ -237,17 +241,34 @@ func main() {
 	initProductClient()
 	registerEtcd(myAddr)
 
-	lis, err := net.Listen("tcp", ":"+port)
+	//启动Prometheus监控(Port:9092)
+	go func() {
+		metricsAddr := fmt.Sprintf(":%s", config.Conf.Server.MetricsPort)
+		http.Handle("/metrics", promhttp.Handler())
+		fmt.Printf("订单服务监控已启动 %s/metrics\n", metricsAddr)
+
+		if err := http.ListenAndServe(metricsAddr, nil); err != nil {
+			fmt.Printf("启动订单服务监控失败: %v", err) //这里没选择挂掉主服务
+		}
+	}()
+
+	grpcAddr := fmt.Sprintf(":%s", config.Conf.Server.Port)
+	lis, err := net.Listen("tcp", grpcAddr)
 	if err != nil {
-		log.Fatalf("无法监听端口 %s: %v", port, err)
+		log.Fatalf("监听端口失败 %s: %v", port, err)
 	}
 
 	//创建gRPC服务器时添加拦截器
 	s := grpc.NewServer(
-		grpc.StatsHandler(otelgrpc.NewServerHandler()),
+		grpc.StreamInterceptor(grpc_prometheus.StreamServerInterceptor),
+		grpc.UnaryInterceptor(grpc_prometheus.UnaryServerInterceptor),
 	)
 	pb.RegisterOrderServiceServer(s, &server{})
 
-	fmt.Println("=== 订单微服务已启动 (Port: 50052) ===")
-	s.Serve(lis)
+	grpc_prometheus.Register(s)
+
+	fmt.Printf("=== 订单微服务已启动 (Port: %s) ===", grpcAddr)
+	if err := s.Serve(lis); err != nil {
+		log.Fatalf("服务启动失败: %v", err)
+	}
 }
