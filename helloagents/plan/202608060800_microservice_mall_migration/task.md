@@ -6,7 +6,8 @@
 
 - [√] 1.1 新增服务边界、事件类型和数据所有权的共享契约包，禁止依赖具体数据库实现。
 - [√] 1.2 新增 Catalog、Inventory/Seckill、Order、Identity、Cart、Payment、Fulfillment 的版本化 gRPC proto；保留旧 proto 兼容。
-- [√] 1.3 新增事件信封、事件版本和幂等键测试，覆盖未知版本和重复事件。
+- [√] 1.3 新增事件信封、事件版本和幂等键测试，覆盖未知事件类型、已知事件未来 `EventVersion` 和重复事件。
+  > 备注: 初始阶段仅覆盖未知事件类型和重复事件；已在 `202608061041_contract_config_hardening` 中补充已知事件未来版本与版本独立演进测试。
 - [√] 1.4 拆分配置约定，明确每个服务独立地址、DSN、RabbitMQ 和 etcd 配置。
 
 ## 2. 阶段2：Catalog 与 Inventory/Seckill 服务

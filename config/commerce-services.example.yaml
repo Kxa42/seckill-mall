@@ -1,6 +1,8 @@
 # 商城目标微服务配置约定。
 # 这是服务拆分阶段的配置基线；敏感值必须通过环境变量或密钥管理系统注入。
 # 每个业务服务拥有独立监听地址、DSN、RabbitMQ 和 etcd 配置，禁止跨服务复用业务 DSN。
+# 入口通过 SECKILL_SERVICES_CONFIG 显式加载本文件；${VAR} 只会在对应服务启动时展开。
+# 未设置所需环境变量时，服务会在启动前失败，且不会输出变量值。
 
 services:
   identity:
@@ -25,6 +27,8 @@ services:
     etcd_addr: 127.0.0.1:2379
     redis_addr: 127.0.0.1:6379
     redis_db: 2
+    store: redis
+    purchase_limit: 5
 
   cart:
     name: cart-service
@@ -58,4 +62,5 @@ gateway:
   name: api-gateway
   http_address: 127.0.0.1:8080
   etcd_addr: 127.0.0.1:2379
+  commerce_url: http://127.0.0.1:8081 # 迁移期间兼容代理地址
   # Gateway 只调用服务，不配置任何业务数据库 DSN。

@@ -3,7 +3,9 @@ package config
 import (
 	"log"
 	"os"
+	"path/filepath"
 	"strconv"
+	"strings"
 
 	"github.com/spf13/viper"
 )
@@ -82,6 +84,18 @@ var Conf *Config
 
 // InitConfig 读取配置文件
 func InitConfig(filename string) {
+	if servicesPath := strings.TrimSpace(os.Getenv("SECKILL_SERVICES_CONFIG")); servicesPath != "" {
+		role := strings.TrimSuffix(filepath.Base(filename), filepath.Ext(filename))
+		loaded, err := LoadServiceRuntimeConfig(servicesPath, role)
+		if err != nil {
+			log.Fatalf("services config read failed: %v", err)
+		}
+		Conf = loaded
+		applyEnvOverrides()
+		log.Printf("config loaded source=services role=%s", role)
+		return
+	}
+
 	viper.AddConfigPath("./config")       // 配置文件夹路径
 	viper.AddConfigPath(".")              // 搜索当前根目录
 	viper.AddConfigPath("./seckill-mall") // 防止在子目录下运行找不到

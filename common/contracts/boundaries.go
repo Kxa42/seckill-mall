@@ -77,15 +77,15 @@ func ServiceBoundaryFor(service string) (ServiceBoundary, bool) {
 // ValidateServiceBoundaries 检查所有权没有重叠，且边界引用的服务和事件均有效。
 func ValidateServiceBoundaries() error {
 	ownedBy := make(map[string]string)
-	services := make(map[string]struct{}, len(serviceBoundaryCatalog))
+	seenServices := make(map[string]struct{}, len(serviceBoundaryCatalog))
 	for _, boundary := range serviceBoundaryCatalog {
 		if boundary.Service == "" {
 			return fmt.Errorf("service boundary service is required")
 		}
-		if _, exists := services[boundary.Service]; exists {
+		if _, exists := seenServices[boundary.Service]; exists {
 			return fmt.Errorf("duplicate service boundary: %s", boundary.Service)
 		}
-		services[boundary.Service] = struct{}{}
+		seenServices[boundary.Service] = struct{}{}
 		for _, dataSet := range boundary.OwnedData {
 			if previous, exists := ownedBy[dataSet]; exists {
 				return fmt.Errorf("data set %q owned by both %s and %s", dataSet, previous, boundary.Service)
@@ -93,7 +93,7 @@ func ValidateServiceBoundaries() error {
 			ownedBy[dataSet] = boundary.Service
 		}
 		for _, dependency := range boundary.SynchronousDependencies {
-			if _, exists := services[dependency]; !exists && !boundaryCatalogContains(dependency) {
+			if !boundaryCatalogContains(dependency) {
 				return fmt.Errorf("service %s depends on unknown service %s", boundary.Service, dependency)
 			}
 		}

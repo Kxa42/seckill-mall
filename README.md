@@ -69,6 +69,7 @@ internal/
 
 common/
   contracts/       跨服务边界、数据所有权、事件信封和事件类型
+  config/          旧配置兼容与按角色统一商城配置加载
   discovery/       etcd endpoint 注册
   pb/              protobuf 生成代码
 
@@ -496,7 +497,7 @@ bash tests/e2e_memory.sh
 - `config/mq.yaml`
 - `config/commerce-services.example.yaml`（目标商城微服务配置基线）
 
-目标商城配置约定为每个业务服务独立的监听地址、MySQL DSN、RabbitMQ URL 和 etcd 地址；Inventory/Seckill 额外拥有 Redis 配置。Gateway 只配置 HTTP、服务发现和下游地址，不配置业务数据库 DSN。当前运行中的旧服务仍使用上述旧配置文件，拆分后按阶段迁移到目标约定。
+目标商城配置约定为每个业务服务独立的监听地址、MySQL DSN、RabbitMQ URL 和 etcd 地址；Inventory/Seckill 额外拥有 Redis 配置。设置 `SECKILL_SERVICES_CONFIG=config/commerce-services.example.yaml` 后，Gateway、Catalog 和 Inventory 会按角色消费统一模板；模板中的 `${VAR}` 只展开当前进程需要的变量，缺失变量会在启动前失败。未设置该变量时，当前运行中的服务继续使用各自 YAML 和 `SECKILL_*` 覆盖。Gateway 只配置 HTTP、服务发现和下游地址，不读取业务数据库 DSN。
 
 敏感配置建议通过环境变量注入：
 
@@ -513,6 +514,8 @@ bash tests/e2e_memory.sh
 - `SECKILL_INVENTORY_STORE` / `SECKILL_INVENTORY_REDIS_ADDR`
 - `SECKILL_INVENTORY_REDIS_PASSWORD` / `SECKILL_INVENTORY_REDIS_DB`
 - `SECKILL_INVENTORY_PURCHASE_LIMIT`
+
+统一模板对应的独立服务变量使用不带 `SECKILL_` 前缀的角色名，例如 `CATALOG_MYSQL_DSN`、`CATALOG_RABBITMQ_URL`、`INVENTORY_MYSQL_DSN`。这些变量只在对应服务加载模板时展开，不会被 Gateway 读取。
 
 ## 监控与追踪
 

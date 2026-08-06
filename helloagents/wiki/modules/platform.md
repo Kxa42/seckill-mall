@@ -30,5 +30,13 @@
 - 当前环境无法拉取 MySQL 镜像，真实 migration 重放和 Compose 健康检查待有 Docker 环境后执行。
 - Catalog/Inventory 的 etcd 注册失败会记录 warning 并继续启动，适合无 etcd 的本地代码验收；生产部署仍需配置健康的 etcd。
 
+### 需求: 按服务配置模板加载
+**模块:** Platform Configuration
+
+#### 场景: 使用统一商城配置模板启动服务
+- 设置 `SECKILL_SERVICES_CONFIG` 后，Gateway、Catalog 和 Inventory 按自身角色读取 `services`/`gateway` 配置。
+- `${VAR}` 只展开当前进程需要的环境变量；缺失变量在启动前报错，错误信息不包含变量值。
+- 未设置 `SECKILL_SERVICES_CONFIG` 时，继续使用 `config/gateway.yaml`、`config/catalog.yaml` 和 `config/inventory.yaml` 等现有配置。
+
 ## 变更历史
 - [202608051526_backend_commerce_mvp](../../history/2026-08/202608051526_backend_commerce_mvp/) - 增加商城平台基础与完整编排。

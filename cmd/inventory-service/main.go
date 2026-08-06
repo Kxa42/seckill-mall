@@ -18,6 +18,7 @@ import (
 	"google.golang.org/grpc/health/grpc_health_v1"
 
 	"seckill-mall/common/config"
+	"seckill-mall/common/contracts"
 	"seckill-mall/common/discovery"
 	"seckill-mall/common/pb"
 	"seckill-mall/common/tracer"
@@ -26,6 +27,7 @@ import (
 
 func main() {
 	config.InitConfig("inventory")
+	validateServiceContract(contracts.ServiceInventory)
 	shutdown := tracer.InitTracer("inventory-service", tracer.EndpointFromEnv())
 	defer shutdown(context.Background())
 
@@ -42,7 +44,7 @@ func main() {
 	}
 	serviceName := config.Conf.Inventory.ServiceName
 	if serviceName == "" {
-		serviceName = "inventory"
+		serviceName = contracts.ServiceInventory
 	}
 	advertiseAddr := config.Conf.Inventory.Address
 	if advertiseAddr == "" {
@@ -77,6 +79,15 @@ func main() {
 	log.Printf("inventory service started addr=%s store=%s", grpcAddr, storeName(store))
 	if err := grpcServer.Serve(lis); err != nil {
 		log.Fatalf("inventory service serve failed: %v", err)
+	}
+}
+
+func validateServiceContract(service string) {
+	if err := contracts.ValidateServiceBoundaries(); err != nil {
+		log.Fatalf("service contract validation failed: %v", err)
+	}
+	if _, ok := contracts.ServiceBoundaryFor(service); !ok {
+		log.Fatalf("service contract is not defined: %s", service)
 	}
 }
 

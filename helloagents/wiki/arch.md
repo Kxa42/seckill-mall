@@ -59,14 +59,15 @@ flowchart LR
 ```
 
 ## 迁移阶段形态
-- **第 2 阶段运行态:** Gateway 的 `GET /api/v1/products*` 通过 `etcd:///seckill/catalog` 调用 Catalog；未显式切换的 `/api/v1` 路由通过 `NoRoute` 兼容代理到 Commerce API。
+- **第 2 阶段运行态:** Gateway 的 `GET /api/v1/products*` 通过 `etcd:///seckill/catalog-service` 调用 Catalog；未显式切换的 `/api/v1` 路由通过 `NoRoute` 兼容代理到 Commerce API。
 - **独立库存态:** Inventory/Seckill 提供 `Reserve`、`Confirm`、`Release` 和 `AdmitSeckill`，MemoryStore 用于无 Docker Fake E2E，RedisStore 用 Lua 保证库存和活动限购原子性。
 - **过渡运行态:** `commerce-api` 仍承载新商城本地事务；Product、Order 和消息 Worker 保持旧 gRPC、Redis Lua、RabbitMQ 链路。
 - **契约基线:** `common/contracts` 只存放跨服务稳定事件信封、事件类型和服务标识；`proto/commerce` 存放新商城版本化 gRPC 契约。
 - **目标边界:** Identity、Catalog、Inventory/Seckill、Cart、Order、Payment、Fulfillment 各自拥有数据和 Outbox/Inbox，禁止跨服务直接写表。
 - **切换原则:** 每阶段先完成 Fake/契约测试，再由 Gateway 将对应 `/api/v1` 路由切换到目标服务。
 - **边界契约:** `common/contracts` 固化七个业务服务的数据集、同步依赖和事件发布/消费关系；返回值为副本，避免调用方修改全局定义。
-- **配置契约:** `config/commerce-services.example.yaml` 为目标服务预留独立监听地址、DSN、RabbitMQ URL 和 etcd 地址；Gateway 不配置业务 DSN，Inventory 额外配置 Redis。
+- **配置契约:** `config/commerce-services.example.yaml` 为目标服务提供独立监听地址、DSN、RabbitMQ URL 和 etcd 地址；通过 `SECKILL_SERVICES_CONFIG` 按角色加载，Gateway 不读取业务 DSN，Inventory 额外配置 Redis。
+- **事件版本契约:** `EventType` 负责路由和主版本，`EventVersion` 负责 Payload/信封演进；传输层接受正数未来版本，消费者必须按能力处理未知版本。
 - **服务入口:** `go run ./cmd/catalog-service` 和 `go run ./cmd/inventory-service` 可在无 MySQL/Redis 时分别使用 debug 内存实现启动；配置和环境变量支持切换到 MySQL、Redis 与 etcd。
 
 ## 商城核心流程
@@ -117,3 +118,5 @@ sequenceDiagram
 | ADR-006 | 订单状态只由 Order Service 维护 | 2026-08-06 | ✅已采纳 | Order、Inventory、Payment、Fulfillment | [详情](../plan/202608060800_microservice_mall_migration/how.md#adr-002-订单状态只由-order-service-维护) |
 | ADR-007 | 服务数据库按所有权隔离 | 2026-08-06 | ✅已采纳 | All Services、Platform | [详情](../plan/202608060800_microservice_mall_migration/how.md#adr-003-服务数据库按所有权隔离) |
 | ADR-008 | 先切换 Catalog 查询，延后秒杀订单完整切换 | 2026-08-06 | ✅已采纳 | Gateway、Catalog、Inventory、Commerce | [详情](../history/2026-08/202608060842_catalog_inventory_services/how.md#adr-001-先切换-catalog-查询延后秒杀订单完整切换) |
+| ADR-009 | EventType 与 EventVersion 独立演进 | 2026-08-06 | ✅已采纳 | Contracts、Messaging、Catalog、Inventory | [详情](../history/2026-08/202608061041_contract_config_hardening/how.md#adr-001-eventtype-与-eventversion-独立演进) |
+| ADR-010 | 显式选择按服务配置并保留旧配置回退 | 2026-08-06 | ✅已采纳 | Platform、Gateway、Catalog、Inventory | [详情](../history/2026-08/202608061041_contract_config_hardening/how.md#adr-002-显式选择按服务配置保留旧配置回退) |

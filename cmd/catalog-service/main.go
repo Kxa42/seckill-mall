@@ -20,6 +20,7 @@ import (
 
 	"seckill-mall/catalog_service"
 	"seckill-mall/common/config"
+	"seckill-mall/common/contracts"
 	"seckill-mall/common/discovery"
 	"seckill-mall/common/pb"
 	"seckill-mall/common/tracer"
@@ -27,6 +28,7 @@ import (
 
 func main() {
 	config.InitConfig("catalog")
+	validateServiceContract(contracts.ServiceCatalog)
 	shutdown := tracer.InitTracer("catalog-service", tracer.EndpointFromEnv())
 	defer shutdown(context.Background())
 
@@ -44,7 +46,7 @@ func main() {
 
 	serviceName := config.Conf.Catalog.ServiceName
 	if serviceName == "" {
-		serviceName = "catalog"
+		serviceName = contracts.ServiceCatalog
 	}
 	advertiseAddr := config.Conf.Catalog.Address
 	if advertiseAddr == "" {
@@ -79,6 +81,15 @@ func main() {
 	log.Printf("catalog service started addr=%s repository=%s", grpcAddr, repositoryName(repository))
 	if err := grpcServer.Serve(lis); err != nil {
 		log.Fatalf("catalog service serve failed: %v", err)
+	}
+}
+
+func validateServiceContract(service string) {
+	if err := contracts.ValidateServiceBoundaries(); err != nil {
+		log.Fatalf("service contract validation failed: %v", err)
+	}
+	if _, ok := contracts.ServiceBoundaryFor(service); !ok {
+		log.Fatalf("service contract is not defined: %s", service)
 	}
 }
 

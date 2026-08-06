@@ -27,12 +27,35 @@ func TestNewEventEnvelope(t *testing.T) {
 }
 
 func TestEventEnvelopeAcceptsUnknownEventTypeForForwardCompatibility(t *testing.T) {
-	event, err := NewEventEnvelope("evt-2", "future.event.v2", "future", "id-1", 2, map[string]string{"ok": "true"}, time.Now())
+	event, err := NewEventEnvelope("evt-2", "future.event.v2", "future", "id-1", 99, map[string]string{"ok": "true"}, time.Now())
 	if err != nil {
 		t.Fatalf("unknown event type should remain structurally valid: %v", err)
 	}
 	if IsKnownEventType(event.EventType) {
 		t.Fatal("future event type should not be reported as known")
+	}
+}
+
+func TestEventEnvelopeAcceptsFutureVersionForKnownEventType(t *testing.T) {
+	event, err := NewEventEnvelope("evt-future", EventOrderCreated, "order", "ord-1", 99, map[string]string{"order_id": "ord-1"}, time.Now())
+	if err != nil {
+		t.Fatalf("known event with a future payload version should remain structurally valid: %v", err)
+	}
+	if !IsKnownEventType(event.EventType) {
+		t.Fatalf("event type %q should remain known", event.EventType)
+	}
+}
+
+func TestEventTypeAndPayloadVersionMayEvolveIndependently(t *testing.T) {
+	event, err := NewEventEnvelope("evt-payload-v2", EventOrderCreated, "order", "ord-1", 2, map[string]any{
+		"order_id":  "ord-1",
+		"new_field": true,
+	}, time.Now())
+	if err != nil {
+		t.Fatalf("event type v1 with payload version 2 should be accepted: %v", err)
+	}
+	if event.EventType != EventOrderCreated || event.EventVersion != 2 {
+		t.Fatalf("unexpected event version contract: type=%q version=%d", event.EventType, event.EventVersion)
 	}
 }
 

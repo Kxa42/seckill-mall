@@ -48,8 +48,10 @@ var knownEventTypes = map[string]struct{}{
 
 // EventEnvelope 是 RabbitMQ 事件的稳定外层格式。Payload 保持 JSON，便于事件版本独立演进。
 type EventEnvelope struct {
-	EventID       string          `json:"event_id"`
-	EventType     string          `json:"event_type"`
+	EventID string `json:"event_id"`
+	// EventType 是事件路由标识，通常包含不可变的主版本后缀，例如 order.created.v1。
+	EventType string `json:"event_type"`
+	// EventVersion 是同一事件类型的 Payload/信封演进版本，与 EventType 的主版本独立。
 	EventVersion  int             `json:"event_version"`
 	AggregateType string          `json:"aggregate_type"`
 	AggregateID   string          `json:"aggregate_id"`
@@ -58,7 +60,7 @@ type EventEnvelope struct {
 	Payload       json.RawMessage `json:"payload"`
 }
 
-// NewEventEnvelope 创建并校验事件信封。事件类型允许未知值，以支持消费者安全地忽略未来事件。
+// NewEventEnvelope 创建并校验事件信封。事件类型和正数未来版本均允许通过，具体消费者负责能力检查。
 func NewEventEnvelope(eventID, eventType, aggregateType, aggregateID string, version int, payload any, occurredAt time.Time) (EventEnvelope, error) {
 	body, err := json.Marshal(payload)
 	if err != nil {
@@ -79,7 +81,7 @@ func NewEventEnvelope(eventID, eventType, aggregateType, aggregateID string, ver
 	return envelope, nil
 }
 
-// Validate 检查事件信封的传输级约束，不判断具体业务 payload。
+// Validate 检查事件信封的传输级约束，不判断具体业务 payload 或消费者是否支持该版本。
 func (e EventEnvelope) Validate() error {
 	switch {
 	case e.EventID == "":

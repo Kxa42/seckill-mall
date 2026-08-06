@@ -13,6 +13,7 @@ import (
 	resolver "go.etcd.io/etcd/client/v3/naming/resolver"
 
 	"seckill-mall/common/config"
+	"seckill-mall/common/contracts"
 	"seckill-mall/common/pb"
 
 	"go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc"
@@ -44,12 +45,12 @@ func initGRPCClients() grpcClients {
 	orderConn := dialService("order", "", etcdResolver)
 	catalogName := config.Conf.Catalog.ServiceName
 	if catalogName == "" {
-		catalogName = "catalog"
+		catalogName = contracts.ServiceCatalog
 	}
 	catalogConn := dialService(catalogName, config.Conf.Catalog.Address, etcdResolver)
 	inventoryName := config.Conf.Inventory.ServiceName
 	if inventoryName == "" {
-		inventoryName = "inventory"
+		inventoryName = contracts.ServiceInventory
 	}
 	inventoryConn := dialService(inventoryName, config.Conf.Inventory.Address, etcdResolver)
 

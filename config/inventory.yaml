@@ -1,11 +1,11 @@
 server:
-  name: "inventory"
+  name: "inventory-service"
   mode: "debug"
   port: "51003"
   metrics_port: "9103"
 
 inventory:
-  service_name: "inventory"
+  service_name: "inventory-service"
   address: "127.0.0.1:51003"
   store: "memory" # release 环境改为 redis
   redis_addr: "127.0.0.1:6379"

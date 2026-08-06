@@ -1,11 +1,11 @@
 server:
-  name: "catalog"
+  name: "catalog-service"
   mode: "debug"
   port: "51002"
   metrics_port: "9102"
 
 catalog:
-  service_name: "catalog"
+  service_name: "catalog-service"
   address: "127.0.0.1:51002"
   mysql_dsn: "" # 推荐通过环境变量 SECKILL_CATALOG_MYSQL_DSN 注入
 

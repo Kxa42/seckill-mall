@@ -15,9 +15,9 @@ commerce:
   url: "http://127.0.0.1:8081"
 
 catalog:
-  service_name: "catalog"
-  address: "" # 留空时通过 etcd://seckill/catalog 发现
+  service_name: "catalog-service"
+  address: "" # 留空时通过 etcd://seckill/catalog-service 发现
 
 inventory:
-  service_name: "inventory"
+  service_name: "inventory-service"
   address: "" # 第二阶段仅建立客户端，秒杀订单仍由兼容代理处理

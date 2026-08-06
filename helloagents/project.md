@@ -13,7 +13,8 @@
 - 每个领域只写自己拥有的表；跨领域功能优先使用 API 或版本化事件。
 - `common/` 只能保存稳定的跨服务契约、配置、追踪和工具，不得保存业务 Repository 或跨服务数据库访问。
 - 服务边界与数据所有权以 `common/contracts` 为契约基线；每个业务服务只能写入自己的数据集。
-- 目标商城服务的地址、独立 DSN、RabbitMQ 和 etcd 配置约定见 `config/commerce-services.example.yaml`；模板不包含真实密钥。
+- 目标商城服务的地址、独立 DSN、RabbitMQ 和 etcd 配置约定见 `config/commerce-services.example.yaml`；设置 `SECKILL_SERVICES_CONFIG` 后由按角色配置加载器消费，模板不包含真实密钥。
+- 事件信封的 `EventType` 与 `EventVersion` 独立演进；事件发布统一使用 `common/contracts.NewEventEnvelope`，消费者自行处理未知未来版本。
 - Catalog/Inventory 可分别通过 `go run ./cmd/catalog-service`、`go run ./cmd/inventory-service` 启动；Gateway 对 Catalog 商品查询设置 2 秒 gRPC deadline，未切换路由继续使用 NoRoute 过渡代理。
 
 ## 开发约定

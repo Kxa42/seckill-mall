@@ -32,8 +32,10 @@
 - 现有 Outbox Worker 只扫描旧 `outbox_events`，尚未发布 `commerce_outbox_events`。
 - 旧 MQ Consumer 仍在一个事务内写旧 `orders` 与 `product` 表；新商城表不受该跨写影响。
 - `common/contracts` 已定义统一事件信封、版本化事件类型、服务标识和数据所有权；订单取消事件的规范名称为 `order.cancelled.v1`，兼容代码别名不会产生第二种线上事件类型。
+- `EventType` 是事件路由和主版本标识，`EventVersion` 是同一事件的 Payload/信封演进版本；信封层接受正数未来版本，消费者必须按支持能力处理、忽略或隔离未知版本。
+- 事件发布必须使用 `common/contracts.NewEventEnvelope`，不得在业务服务中复制事件字符串或自行拼接事件信封。
 - `proto/commerce` 已定义 Catalog、Inventory、Identity、Cart、Order、Payment、Fulfillment 的内部 gRPC 契约，对应服务仍按阶段拆分。
-- Catalog/Inventory 本阶段通过 gRPC 运行时边界接入，但尚未发布新的跨服务业务事件；订单完整切换前不允许借 RabbitMQ 旁路重复扣库存。
+- Catalog/Inventory 本阶段启动时通过 `ServiceBoundaryFor` 和 `ValidateServiceBoundaries` 接入共享边界，但尚未发布新的跨服务业务事件；订单完整切换前不允许借 RabbitMQ 旁路重复扣库存。
 - 发布失败、重复消息和 DLQ 的真实集成验收需要 RabbitMQ/Redis/MySQL 环境。
 
 ## 变更历史
