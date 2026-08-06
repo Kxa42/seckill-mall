@@ -1,6 +1,6 @@
 # 任务清单: 统一商城架构与阶段5可靠消息闭环
 
-目录: `helloagents/plan/202608061551_unified_stage5_messaging/`
+目录: `helloagents/history/2026-08/202608061551_unified_stage5_messaging/`
 
 > 目标: 删除旧秒杀运行时和旧 HTTP 入口，统一到新商城微服务、统一事件协议和服务级 Outbox/Inbox。
 

@@ -7,10 +7,12 @@
 | 时间戳 | 功能名称 | 类型 | 状态 | 方案包路径 |
 |--------|----------|------|------|------------|
 | 202608051526 | backend_commerce_mvp | 功能 | ✅已完成（28完成/6跳过） | [方案包](2026-08/202608051526_backend_commerce_mvp/) |
+| 202608060800 | microservice_mall_migration | 架构迁移 | ✅已完成（35完成） | [方案包](2026-08/202608060800_microservice_mall_migration/) |
 | 202608060842 | catalog_inventory_services | 功能 | ✅已完成（17完成） | [方案包](2026-08/202608060842_catalog_inventory_services/) |
 | 202608061041 | contract_config_hardening | 修复 | ✅已完成（19完成） | [方案包](2026-08/202608061041_contract_config_hardening/) |
 | 202608061112 | order_service_orchestration | 功能 | ✅已完成（38完成/1跳过） | [方案包](2026-08/202608061112_order_service_orchestration/) |
 | 202608061319 | stage4_domain_services | 功能 | ✅已完成（42完成，真实基础设施跳过） | [方案包](2026-08/202608061319_stage4_domain_services/) |
+| 202608061539 | stage5_messaging | 方案清理 | [-]未执行（统一方案替代） | [方案包](2026-08/202608061539_stage5_messaging/) |
 | 202608061551 | unified_stage5_messaging | 架构迁移 | ✅已完成（35完成/1跳过） | [方案包](2026-08/202608061551_unified_stage5_messaging/) |
 
 ## 按月归档
@@ -18,8 +20,10 @@
 ### 2026-08
 
 - [202608051526_backend_commerce_mvp](2026-08/202608051526_backend_commerce_mvp/) - 完成商城后端 MVP；真实 Docker/MySQL 集成与旧秒杀最终迁移按记录跳过。
+- [202608060800_microservice_mall_migration](2026-08/202608060800_microservice_mall_migration/) - 完成从阶段1到阶段5的统一商城微服务迁移，归档总任务表及各阶段验收记录。
 - [202608060842_catalog_inventory_services](2026-08/202608060842_catalog_inventory_services/) - 拆分 Catalog 与 Inventory/Seckill 服务，切换商品查询并完成内存 Fake 验收；秒杀订单完整切换留待 Order Service 阶段。
 - [202608061041_contract_config_hardening](2026-08/202608061041_contract_config_hardening/) - 补齐事件版本前向兼容、共享契约运行时接入和按服务配置加载；真实基础设施联调因 Docker 不可用跳过。
 - [202608061112_order_service_orchestration](2026-08/202608061112_order_service_orchestration/) - 建立唯一 Order Service，切换普通/秒杀订单 gRPC 编排，补齐退款恢复、创建意图恢复和 Memory/bufconn 验收；真实基础设施因 Docker 不可用跳过。
 - [202608061319_stage4_domain_services](2026-08/202608061319_stage4_domain_services/) - 拆分 Identity、Cart、Payment、Fulfillment，Gateway 显式切换商城领域路由，完成 Memory/Fake/bufconn 验收；真实基础设施因 Docker daemon 不可用跳过。
+- [202608061539_stage5_messaging](2026-08/202608061539_stage5_messaging/) - 原阶段5草案未执行，因统一设计方案已覆盖其目标而归档清理。
 - [202608061551_unified_stage5_messaging](2026-08/202608061551_unified_stage5_messaging/) - 统一商城事件协议和服务级 Outbox/Inbox，移除旧运行时与旧 HTTP 入口，补齐 Inventory Redis Stream 到 RabbitMQ 桥接和事件消费者；Memory/race/vet/Compose 静态验收通过，真实 RabbitMQ、Compose 运行和 migration 因 Docker daemon 不可用跳过。

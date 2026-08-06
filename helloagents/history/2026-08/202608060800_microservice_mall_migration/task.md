@@ -1,6 +1,6 @@
 # 任务清单: 微服务商城与秒杀统一架构迁移
 
-目录: `helloagents/plan/202608060800_microservice_mall_migration/`
+目录: `helloagents/history/2026-08/202608060800_microservice_mall_migration/`
 
 ## 1. 阶段1：契约与边界基线
 

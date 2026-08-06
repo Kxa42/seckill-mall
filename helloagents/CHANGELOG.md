@@ -43,6 +43,7 @@
 - 统一订单取消事件名称为 `order.cancelled.v1`，保留旧拼写的代码别名但不增加新的事件类型。
 - Gateway 的 `/api/v1/products`、`/api/v1/products/:id` 由 Catalog gRPC 提供，其他 `/api/v1` 路由同样显式调用目标服务。
 - Inventory Stream 出站事件使用 pending claim 重放，入站取消/退款事件使用 Redis Inbox 租约与已处理标记；MQ 未配置时服务安全降级，不连接任何旧队列。
+- 归档完整微服务迁移总方案和已执行阶段5方案；未执行的重复阶段5草案标记为统一方案替代并移入历史记录。
 
 ## [0.1.0] - 2026-08-05
 
