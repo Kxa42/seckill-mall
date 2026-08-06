@@ -52,6 +52,12 @@ func TestLoadServiceRuntimeConfigMapsGatewayDiscoveryWithoutBusinessSecrets(t *t
 	if cfg.Inventory.ServiceName != "inventory-service" || cfg.Inventory.Address != "127.0.0.1:51003" {
 		t.Fatalf("unexpected gateway inventory discovery config: %+v", cfg.Inventory)
 	}
+	if cfg.Identity.ServiceName != "identity-service" || cfg.Cart.ServiceName != "cart-service" || cfg.Order.ServiceName != "order-service" {
+		t.Fatalf("unexpected gateway core discovery config: identity=%+v cart=%+v order=%+v", cfg.Identity, cfg.Cart, cfg.Order)
+	}
+	if cfg.Payment.ServiceName != "payment-service" || cfg.Fulfillment.ServiceName != "fulfillment-service" {
+		t.Fatalf("unexpected gateway post-order discovery config: payment=%+v fulfillment=%+v", cfg.Payment, cfg.Fulfillment)
+	}
 	if cfg.Commerce.URL != "http://127.0.0.1:8081" {
 		t.Fatalf("unexpected gateway commerce URL: %q", cfg.Commerce.URL)
 	}
@@ -201,6 +207,32 @@ func TestLoadServiceRuntimeConfigMapsOrderDependencies(t *testing.T) {
 	}
 }
 
+func TestLoadServiceRuntimeConfigMapsStage4Dependencies(t *testing.T) {
+	path := writeServicesConfig(t)
+	t.Setenv("PAYMENT_SECRET", "payment-secret-value-32-characters")
+
+	cart, err := LoadServiceRuntimeConfig(path, "cart")
+	if err != nil {
+		t.Fatalf("cart config load error = %v", err)
+	}
+	if cart.Cart.ServiceName != "cart-service" || cart.Server.Port != "51004" || cart.Catalog.Address != "127.0.0.1:51002" {
+		t.Fatalf("unexpected cart config: cart=%+v catalog=%+v server=%+v", cart.Cart, cart.Catalog, cart.Server)
+	}
+
+	for _, role := range []string{"payment", "fulfillment"} {
+		cfg, loadErr := LoadServiceRuntimeConfig(path, role)
+		if loadErr != nil {
+			t.Fatalf("%s config load error = %v", role, loadErr)
+		}
+		if cfg.Order.ServiceName != "order-service" || cfg.Order.Address != "127.0.0.1:51005" {
+			t.Fatalf("%s order dependency not mapped: %+v", role, cfg.Order)
+		}
+		if role == "payment" && cfg.Payment.Secret != "payment-secret-value-32-characters" {
+			t.Fatalf("payment secret was not expanded: %q", cfg.Payment.Secret)
+		}
+	}
+}
+
 // TestLoadServiceRuntimeConfigRejectsRedisStoreWithoutRedisAddr 验证 inventory 在
 // store=redis 但 redis_addr 缺失时于加载阶段失败，而非推迟到运行时 redis 连接崩溃。
 func TestLoadServiceRuntimeConfigRejectsRedisStoreWithoutRedisAddr(t *testing.T) {
@@ -284,11 +316,30 @@ func writeServicesConfig(t *testing.T) string {
     store: redis
     purchase_limit: 5
     metrics_port: "9103"
+  cart:
+    name: cart-service
+    address: 127.0.0.1:51004
+    mysql_dsn: "${CART_MYSQL_DSN}"
+    rabbitmq_url: "${CART_RABBITMQ_URL}"
+    etcd_addr: 127.0.0.1:2379
   order:
     name: order-service
     address: 127.0.0.1:51005
     mysql_dsn: "${ORDER_MYSQL_DSN}"
     rabbitmq_url: "${ORDER_RABBITMQ_URL}"
+    etcd_addr: 127.0.0.1:2379
+  payment:
+    name: payment-service
+    address: 127.0.0.1:51006
+    mysql_dsn: "${PAYMENT_MYSQL_DSN}"
+    rabbitmq_url: "${PAYMENT_RABBITMQ_URL}"
+    etcd_addr: 127.0.0.1:2379
+    secret: "${PAYMENT_SECRET}"
+  fulfillment:
+    name: fulfillment-service
+    address: 127.0.0.1:51007
+    mysql_dsn: "${FULFILLMENT_MYSQL_DSN}"
+    rabbitmq_url: "${FULFILLMENT_RABBITMQ_URL}"
     etcd_addr: 127.0.0.1:2379
 gateway:
   name: api-gateway

@@ -19,7 +19,9 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	FulfillmentService_Ship_FullMethodName = "/commerce.fulfillment.v1.FulfillmentService/Ship"
+	FulfillmentService_Ship_FullMethodName           = "/commerce.fulfillment.v1.FulfillmentService/Ship"
+	FulfillmentService_ConfirmReceipt_FullMethodName = "/commerce.fulfillment.v1.FulfillmentService/ConfirmReceipt"
+	FulfillmentService_Get_FullMethodName            = "/commerce.fulfillment.v1.FulfillmentService/Get"
 )
 
 // FulfillmentServiceClient is the client API for FulfillmentService service.
@@ -27,6 +29,8 @@ const (
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 type FulfillmentServiceClient interface {
 	Ship(ctx context.Context, in *FulfillmentShipRequest, opts ...grpc.CallOption) (*FulfillmentShipResponse, error)
+	ConfirmReceipt(ctx context.Context, in *FulfillmentConfirmReceiptRequest, opts ...grpc.CallOption) (*FulfillmentShipResponse, error)
+	Get(ctx context.Context, in *FulfillmentGetRequest, opts ...grpc.CallOption) (*FulfillmentShipResponse, error)
 }
 
 type fulfillmentServiceClient struct {
@@ -47,11 +51,33 @@ func (c *fulfillmentServiceClient) Ship(ctx context.Context, in *FulfillmentShip
 	return out, nil
 }
 
+func (c *fulfillmentServiceClient) ConfirmReceipt(ctx context.Context, in *FulfillmentConfirmReceiptRequest, opts ...grpc.CallOption) (*FulfillmentShipResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(FulfillmentShipResponse)
+	err := c.cc.Invoke(ctx, FulfillmentService_ConfirmReceipt_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *fulfillmentServiceClient) Get(ctx context.Context, in *FulfillmentGetRequest, opts ...grpc.CallOption) (*FulfillmentShipResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(FulfillmentShipResponse)
+	err := c.cc.Invoke(ctx, FulfillmentService_Get_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // FulfillmentServiceServer is the server API for FulfillmentService service.
 // All implementations must embed UnimplementedFulfillmentServiceServer
 // for forward compatibility.
 type FulfillmentServiceServer interface {
 	Ship(context.Context, *FulfillmentShipRequest) (*FulfillmentShipResponse, error)
+	ConfirmReceipt(context.Context, *FulfillmentConfirmReceiptRequest) (*FulfillmentShipResponse, error)
+	Get(context.Context, *FulfillmentGetRequest) (*FulfillmentShipResponse, error)
 	mustEmbedUnimplementedFulfillmentServiceServer()
 }
 
@@ -64,6 +90,12 @@ type UnimplementedFulfillmentServiceServer struct{}
 
 func (UnimplementedFulfillmentServiceServer) Ship(context.Context, *FulfillmentShipRequest) (*FulfillmentShipResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method Ship not implemented")
+}
+func (UnimplementedFulfillmentServiceServer) ConfirmReceipt(context.Context, *FulfillmentConfirmReceiptRequest) (*FulfillmentShipResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ConfirmReceipt not implemented")
+}
+func (UnimplementedFulfillmentServiceServer) Get(context.Context, *FulfillmentGetRequest) (*FulfillmentShipResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method Get not implemented")
 }
 func (UnimplementedFulfillmentServiceServer) mustEmbedUnimplementedFulfillmentServiceServer() {}
 func (UnimplementedFulfillmentServiceServer) testEmbeddedByValue()                            {}
@@ -104,6 +136,42 @@ func _FulfillmentService_Ship_Handler(srv interface{}, ctx context.Context, dec 
 	return interceptor(ctx, in, info, handler)
 }
 
+func _FulfillmentService_ConfirmReceipt_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(FulfillmentConfirmReceiptRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(FulfillmentServiceServer).ConfirmReceipt(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: FulfillmentService_ConfirmReceipt_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(FulfillmentServiceServer).ConfirmReceipt(ctx, req.(*FulfillmentConfirmReceiptRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _FulfillmentService_Get_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(FulfillmentGetRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(FulfillmentServiceServer).Get(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: FulfillmentService_Get_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(FulfillmentServiceServer).Get(ctx, req.(*FulfillmentGetRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // FulfillmentService_ServiceDesc is the grpc.ServiceDesc for FulfillmentService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -114,6 +182,14 @@ var FulfillmentService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "Ship",
 			Handler:    _FulfillmentService_Ship_Handler,
+		},
+		{
+			MethodName: "ConfirmReceipt",
+			Handler:    _FulfillmentService_ConfirmReceipt_Handler,
+		},
+		{
+			MethodName: "Get",
+			Handler:    _FulfillmentService_Get_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

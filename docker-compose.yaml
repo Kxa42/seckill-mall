@@ -239,10 +239,43 @@ services:
       SECKILL_ETCD_ADDR: etcd:2379
       SECKILL_ADVERTISE_ADDR: identity-service:51001
       SECKILL_SERVER_MODE: release
+      SECKILL_JWT_SECRET: "${SECKILL_JWT_SECRET:?SECKILL_JWT_SECRET is required}"
+      SECKILL_INTERNAL_CALL_SECRET: "${SECKILL_INTERNAL_CALL_SECRET:?SECKILL_INTERNAL_CALL_SECRET is required}"
+      SECKILL_ADMIN_EMAIL: "${SECKILL_ADMIN_EMAIL:-}"
+      SECKILL_ADMIN_PASSWORD: "${SECKILL_ADMIN_PASSWORD:-}"
     depends_on:
       migrate:
         condition: service_completed_successfully
       etcd:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "kill -0 1"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    restart: unless-stopped
+
+  cart-service:
+    build:
+      context: .
+      args:
+        PACKAGE: ./cmd/cart-service
+    container_name: seckill-cart-service
+    ports:
+      - "51004:51004"
+    environment:
+      SECKILL_CART_MYSQL_DSN: "root:${SECKILL_MYSQL_ROOT_PASSWORD:?SECKILL_MYSQL_ROOT_PASSWORD is required}@tcp(mysql:3306)/seckill?charset=utf8mb4&parseTime=True&loc=UTC"
+      SECKILL_CATALOG_ADDR: catalog-service:51002
+      SECKILL_ETCD_ADDR: etcd:2379
+      SECKILL_ADVERTISE_ADDR: cart-service:51004
+      SECKILL_INTERNAL_CALL_SECRET: "${SECKILL_INTERNAL_CALL_SECRET:?SECKILL_INTERNAL_CALL_SECRET is required}"
+      SECKILL_SERVER_MODE: release
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      etcd:
+        condition: service_healthy
+      catalog-service:
         condition: service_healthy
     healthcheck:
       test: ["CMD-SHELL", "kill -0 1"]
@@ -279,6 +312,65 @@ services:
       inventory-service:
         condition: service_healthy
       identity-service:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "kill -0 1"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    restart: unless-stopped
+
+  payment-service:
+    build:
+      context: .
+      args:
+        PACKAGE: ./cmd/payment-service
+    container_name: seckill-payment-service
+    ports:
+      - "51006:51006"
+    environment:
+      SECKILL_PAYMENT_MYSQL_DSN: "root:${SECKILL_MYSQL_ROOT_PASSWORD:?SECKILL_MYSQL_ROOT_PASSWORD is required}@tcp(mysql:3306)/seckill?charset=utf8mb4&parseTime=True&loc=UTC"
+      SECKILL_PAYMENT_SECRET: "${SECKILL_PAYMENT_SECRET:?SECKILL_PAYMENT_SECRET is required}"
+      SECKILL_ORDER_ADDR: order-service:51005
+      SECKILL_ETCD_ADDR: etcd:2379
+      SECKILL_ADVERTISE_ADDR: payment-service:51006
+      SECKILL_INTERNAL_CALL_SECRET: "${SECKILL_INTERNAL_CALL_SECRET:?SECKILL_INTERNAL_CALL_SECRET is required}"
+      SECKILL_SERVER_MODE: release
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      etcd:
+        condition: service_healthy
+      order-service:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "kill -0 1"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    restart: unless-stopped
+
+  fulfillment-service:
+    build:
+      context: .
+      args:
+        PACKAGE: ./cmd/fulfillment-service
+    container_name: seckill-fulfillment-service
+    ports:
+      - "51007:51007"
+    environment:
+      SECKILL_FULFILLMENT_MYSQL_DSN: "root:${SECKILL_MYSQL_ROOT_PASSWORD:?SECKILL_MYSQL_ROOT_PASSWORD is required}@tcp(mysql:3306)/seckill?charset=utf8mb4&parseTime=True&loc=UTC"
+      SECKILL_ORDER_ADDR: order-service:51005
+      SECKILL_ETCD_ADDR: etcd:2379
+      SECKILL_ADVERTISE_ADDR: fulfillment-service:51007
+      SECKILL_INTERNAL_CALL_SECRET: "${SECKILL_INTERNAL_CALL_SECRET:?SECKILL_INTERNAL_CALL_SECRET is required}"
+      SECKILL_SERVER_MODE: release
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      etcd:
+        condition: service_healthy
+      order-service:
         condition: service_healthy
     healthcheck:
       test: ["CMD-SHELL", "kill -0 1"]
@@ -413,6 +505,15 @@ services:
       SECKILL_COMMERCE_URL: http://commerce-api:8081
       SECKILL_ORDER_SERVICE: order-service
       SECKILL_ORDER_ADDR: order-service:51005
+      SECKILL_IDENTITY_SERVICE: identity-service
+      SECKILL_IDENTITY_ADDR: identity-service:51001
+      SECKILL_CART_SERVICE: cart-service
+      SECKILL_CART_ADDR: cart-service:51004
+      SECKILL_PAYMENT_SERVICE: payment-service
+      SECKILL_PAYMENT_ADDR: payment-service:51006
+      SECKILL_FULFILLMENT_SERVICE: fulfillment-service
+      SECKILL_FULFILLMENT_ADDR: fulfillment-service:51007
+      SECKILL_INTERNAL_CALL_SECRET: "${SECKILL_INTERNAL_CALL_SECRET:?SECKILL_INTERNAL_CALL_SECRET is required}"
       SECKILL_OTEL_ENDPOINT: jaeger:4318
       SECKILL_SERVER_MODE: release
     depends_on:
@@ -421,6 +522,14 @@ services:
       product-service:
         condition: service_healthy
       order-service:
+        condition: service_healthy
+      identity-service:
+        condition: service_healthy
+      cart-service:
+        condition: service_healthy
+      payment-service:
+        condition: service_healthy
+      fulfillment-service:
         condition: service_healthy
       legacy-order-service:
         condition: service_healthy

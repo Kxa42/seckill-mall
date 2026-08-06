@@ -19,6 +19,13 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
+	IdentityService_Register_FullMethodName           = "/commerce.identity.v1.IdentityService/Register"
+	IdentityService_Login_FullMethodName              = "/commerce.identity.v1.IdentityService/Login"
+	IdentityService_Refresh_FullMethodName            = "/commerce.identity.v1.IdentityService/Refresh"
+	IdentityService_CreateAddress_FullMethodName      = "/commerce.identity.v1.IdentityService/CreateAddress"
+	IdentityService_UpdateAddress_FullMethodName      = "/commerce.identity.v1.IdentityService/UpdateAddress"
+	IdentityService_DeleteAddress_FullMethodName      = "/commerce.identity.v1.IdentityService/DeleteAddress"
+	IdentityService_ListAddresses_FullMethodName      = "/commerce.identity.v1.IdentityService/ListAddresses"
 	IdentityService_GetAddressSnapshot_FullMethodName = "/commerce.identity.v1.IdentityService/GetAddressSnapshot"
 )
 
@@ -26,6 +33,13 @@ const (
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 type IdentityServiceClient interface {
+	Register(ctx context.Context, in *IdentityCredentialsRequest, opts ...grpc.CallOption) (*IdentityTokenPair, error)
+	Login(ctx context.Context, in *IdentityCredentialsRequest, opts ...grpc.CallOption) (*IdentityTokenPair, error)
+	Refresh(ctx context.Context, in *IdentityRefreshRequest, opts ...grpc.CallOption) (*IdentityTokenPair, error)
+	CreateAddress(ctx context.Context, in *IdentityAddressCreateRequest, opts ...grpc.CallOption) (*IdentityAddress, error)
+	UpdateAddress(ctx context.Context, in *IdentityAddressUpdateRequest, opts ...grpc.CallOption) (*IdentityAddress, error)
+	DeleteAddress(ctx context.Context, in *IdentityAddressDeleteRequest, opts ...grpc.CallOption) (*IdentityAddressDeleteResponse, error)
+	ListAddresses(ctx context.Context, in *IdentityAddressListRequest, opts ...grpc.CallOption) (*IdentityAddressListResponse, error)
 	GetAddressSnapshot(ctx context.Context, in *IdentityAddressSnapshotRequest, opts ...grpc.CallOption) (*IdentityAddressSnapshot, error)
 }
 
@@ -35,6 +49,76 @@ type identityServiceClient struct {
 
 func NewIdentityServiceClient(cc grpc.ClientConnInterface) IdentityServiceClient {
 	return &identityServiceClient{cc}
+}
+
+func (c *identityServiceClient) Register(ctx context.Context, in *IdentityCredentialsRequest, opts ...grpc.CallOption) (*IdentityTokenPair, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(IdentityTokenPair)
+	err := c.cc.Invoke(ctx, IdentityService_Register_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *identityServiceClient) Login(ctx context.Context, in *IdentityCredentialsRequest, opts ...grpc.CallOption) (*IdentityTokenPair, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(IdentityTokenPair)
+	err := c.cc.Invoke(ctx, IdentityService_Login_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *identityServiceClient) Refresh(ctx context.Context, in *IdentityRefreshRequest, opts ...grpc.CallOption) (*IdentityTokenPair, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(IdentityTokenPair)
+	err := c.cc.Invoke(ctx, IdentityService_Refresh_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *identityServiceClient) CreateAddress(ctx context.Context, in *IdentityAddressCreateRequest, opts ...grpc.CallOption) (*IdentityAddress, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(IdentityAddress)
+	err := c.cc.Invoke(ctx, IdentityService_CreateAddress_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *identityServiceClient) UpdateAddress(ctx context.Context, in *IdentityAddressUpdateRequest, opts ...grpc.CallOption) (*IdentityAddress, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(IdentityAddress)
+	err := c.cc.Invoke(ctx, IdentityService_UpdateAddress_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *identityServiceClient) DeleteAddress(ctx context.Context, in *IdentityAddressDeleteRequest, opts ...grpc.CallOption) (*IdentityAddressDeleteResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(IdentityAddressDeleteResponse)
+	err := c.cc.Invoke(ctx, IdentityService_DeleteAddress_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *identityServiceClient) ListAddresses(ctx context.Context, in *IdentityAddressListRequest, opts ...grpc.CallOption) (*IdentityAddressListResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(IdentityAddressListResponse)
+	err := c.cc.Invoke(ctx, IdentityService_ListAddresses_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
 }
 
 func (c *identityServiceClient) GetAddressSnapshot(ctx context.Context, in *IdentityAddressSnapshotRequest, opts ...grpc.CallOption) (*IdentityAddressSnapshot, error) {
@@ -51,6 +135,13 @@ func (c *identityServiceClient) GetAddressSnapshot(ctx context.Context, in *Iden
 // All implementations must embed UnimplementedIdentityServiceServer
 // for forward compatibility.
 type IdentityServiceServer interface {
+	Register(context.Context, *IdentityCredentialsRequest) (*IdentityTokenPair, error)
+	Login(context.Context, *IdentityCredentialsRequest) (*IdentityTokenPair, error)
+	Refresh(context.Context, *IdentityRefreshRequest) (*IdentityTokenPair, error)
+	CreateAddress(context.Context, *IdentityAddressCreateRequest) (*IdentityAddress, error)
+	UpdateAddress(context.Context, *IdentityAddressUpdateRequest) (*IdentityAddress, error)
+	DeleteAddress(context.Context, *IdentityAddressDeleteRequest) (*IdentityAddressDeleteResponse, error)
+	ListAddresses(context.Context, *IdentityAddressListRequest) (*IdentityAddressListResponse, error)
 	GetAddressSnapshot(context.Context, *IdentityAddressSnapshotRequest) (*IdentityAddressSnapshot, error)
 	mustEmbedUnimplementedIdentityServiceServer()
 }
@@ -62,6 +153,27 @@ type IdentityServiceServer interface {
 // pointer dereference when methods are called.
 type UnimplementedIdentityServiceServer struct{}
 
+func (UnimplementedIdentityServiceServer) Register(context.Context, *IdentityCredentialsRequest) (*IdentityTokenPair, error) {
+	return nil, status.Error(codes.Unimplemented, "method Register not implemented")
+}
+func (UnimplementedIdentityServiceServer) Login(context.Context, *IdentityCredentialsRequest) (*IdentityTokenPair, error) {
+	return nil, status.Error(codes.Unimplemented, "method Login not implemented")
+}
+func (UnimplementedIdentityServiceServer) Refresh(context.Context, *IdentityRefreshRequest) (*IdentityTokenPair, error) {
+	return nil, status.Error(codes.Unimplemented, "method Refresh not implemented")
+}
+func (UnimplementedIdentityServiceServer) CreateAddress(context.Context, *IdentityAddressCreateRequest) (*IdentityAddress, error) {
+	return nil, status.Error(codes.Unimplemented, "method CreateAddress not implemented")
+}
+func (UnimplementedIdentityServiceServer) UpdateAddress(context.Context, *IdentityAddressUpdateRequest) (*IdentityAddress, error) {
+	return nil, status.Error(codes.Unimplemented, "method UpdateAddress not implemented")
+}
+func (UnimplementedIdentityServiceServer) DeleteAddress(context.Context, *IdentityAddressDeleteRequest) (*IdentityAddressDeleteResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method DeleteAddress not implemented")
+}
+func (UnimplementedIdentityServiceServer) ListAddresses(context.Context, *IdentityAddressListRequest) (*IdentityAddressListResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ListAddresses not implemented")
+}
 func (UnimplementedIdentityServiceServer) GetAddressSnapshot(context.Context, *IdentityAddressSnapshotRequest) (*IdentityAddressSnapshot, error) {
 	return nil, status.Error(codes.Unimplemented, "method GetAddressSnapshot not implemented")
 }
@@ -84,6 +196,132 @@ func RegisterIdentityServiceServer(s grpc.ServiceRegistrar, srv IdentityServiceS
 		t.testEmbeddedByValue()
 	}
 	s.RegisterService(&IdentityService_ServiceDesc, srv)
+}
+
+func _IdentityService_Register_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(IdentityCredentialsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(IdentityServiceServer).Register(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: IdentityService_Register_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(IdentityServiceServer).Register(ctx, req.(*IdentityCredentialsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _IdentityService_Login_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(IdentityCredentialsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(IdentityServiceServer).Login(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: IdentityService_Login_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(IdentityServiceServer).Login(ctx, req.(*IdentityCredentialsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _IdentityService_Refresh_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(IdentityRefreshRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(IdentityServiceServer).Refresh(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: IdentityService_Refresh_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(IdentityServiceServer).Refresh(ctx, req.(*IdentityRefreshRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _IdentityService_CreateAddress_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(IdentityAddressCreateRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(IdentityServiceServer).CreateAddress(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: IdentityService_CreateAddress_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(IdentityServiceServer).CreateAddress(ctx, req.(*IdentityAddressCreateRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _IdentityService_UpdateAddress_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(IdentityAddressUpdateRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(IdentityServiceServer).UpdateAddress(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: IdentityService_UpdateAddress_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(IdentityServiceServer).UpdateAddress(ctx, req.(*IdentityAddressUpdateRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _IdentityService_DeleteAddress_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(IdentityAddressDeleteRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(IdentityServiceServer).DeleteAddress(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: IdentityService_DeleteAddress_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(IdentityServiceServer).DeleteAddress(ctx, req.(*IdentityAddressDeleteRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _IdentityService_ListAddresses_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(IdentityAddressListRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(IdentityServiceServer).ListAddresses(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: IdentityService_ListAddresses_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(IdentityServiceServer).ListAddresses(ctx, req.(*IdentityAddressListRequest))
+	}
+	return interceptor(ctx, in, info, handler)
 }
 
 func _IdentityService_GetAddressSnapshot_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
@@ -111,6 +349,34 @@ var IdentityService_ServiceDesc = grpc.ServiceDesc{
 	ServiceName: "commerce.identity.v1.IdentityService",
 	HandlerType: (*IdentityServiceServer)(nil),
 	Methods: []grpc.MethodDesc{
+		{
+			MethodName: "Register",
+			Handler:    _IdentityService_Register_Handler,
+		},
+		{
+			MethodName: "Login",
+			Handler:    _IdentityService_Login_Handler,
+		},
+		{
+			MethodName: "Refresh",
+			Handler:    _IdentityService_Refresh_Handler,
+		},
+		{
+			MethodName: "CreateAddress",
+			Handler:    _IdentityService_CreateAddress_Handler,
+		},
+		{
+			MethodName: "UpdateAddress",
+			Handler:    _IdentityService_UpdateAddress_Handler,
+		},
+		{
+			MethodName: "DeleteAddress",
+			Handler:    _IdentityService_DeleteAddress_Handler,
+		},
+		{
+			MethodName: "ListAddresses",
+			Handler:    _IdentityService_ListAddresses_Handler,
+		},
 		{
 			MethodName: "GetAddressSnapshot",
 			Handler:    _IdentityService_GetAddressSnapshot_Handler,

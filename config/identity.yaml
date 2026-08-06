@@ -12,3 +12,6 @@ identity:
 
 etcd:
   addr: "127.0.0.1:2379"
+
+jwt:
+  secret: "" # 生产环境通过 SECKILL_JWT_SECRET 注入，至少 32 字节

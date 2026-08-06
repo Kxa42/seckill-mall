@@ -11,18 +11,21 @@ import (
 )
 
 type Config struct {
-	Server    ServerConfig    `mapstructure:"server"`
-	MySQL     MySQLConfig     `mapstructure:"mysql"`
-	MQ        MQConfig        `mapstructure:"mq"`
-	Redis     RedisConfig     `mapstructure:"redis"`
-	Etcd      EtcdConfig      `mapstructure:"etcd"`
-	Seckill   SeckillConfig   `mapstructure:"seckill"`
-	JWT       JWTConfig       `mapstructure:"jwt"`
-	Commerce  CommerceConfig  `mapstructure:"commerce"`
-	Catalog   CatalogConfig   `mapstructure:"catalog"`
-	Inventory InventoryConfig `mapstructure:"inventory"`
-	Identity  IdentityConfig  `mapstructure:"identity"`
-	Order     OrderConfig     `mapstructure:"order"`
+	Server      ServerConfig      `mapstructure:"server"`
+	MySQL       MySQLConfig       `mapstructure:"mysql"`
+	MQ          MQConfig          `mapstructure:"mq"`
+	Redis       RedisConfig       `mapstructure:"redis"`
+	Etcd        EtcdConfig        `mapstructure:"etcd"`
+	Seckill     SeckillConfig     `mapstructure:"seckill"`
+	JWT         JWTConfig         `mapstructure:"jwt"`
+	Commerce    CommerceConfig    `mapstructure:"commerce"`
+	Catalog     CatalogConfig     `mapstructure:"catalog"`
+	Inventory   InventoryConfig   `mapstructure:"inventory"`
+	Identity    IdentityConfig    `mapstructure:"identity"`
+	Order       OrderConfig       `mapstructure:"order"`
+	Cart        CartConfig        `mapstructure:"cart"`
+	Payment     PaymentConfig     `mapstructure:"payment"`
+	Fulfillment FulfillmentConfig `mapstructure:"fulfillment"`
 }
 
 type ServerConfig struct {
@@ -95,6 +98,28 @@ type OrderConfig struct {
 	MySQLDSN    string `mapstructure:"mysql_dsn"`
 }
 
+// CartConfig 描述 Cart 服务自身或 Gateway 的服务发现目标。
+type CartConfig struct {
+	ServiceName string `mapstructure:"service_name"`
+	Address     string `mapstructure:"address"`
+	MySQLDSN    string `mapstructure:"mysql_dsn"`
+}
+
+// PaymentConfig 描述 Payment 服务自身或 Gateway 的服务发现目标。
+type PaymentConfig struct {
+	ServiceName string `mapstructure:"service_name"`
+	Address     string `mapstructure:"address"`
+	MySQLDSN    string `mapstructure:"mysql_dsn"`
+	Secret      string `mapstructure:"secret"`
+}
+
+// FulfillmentConfig 描述 Fulfillment 服务自身或 Gateway 的服务发现目标。
+type FulfillmentConfig struct {
+	ServiceName string `mapstructure:"service_name"`
+	Address     string `mapstructure:"address"`
+	MySQLDSN    string `mapstructure:"mysql_dsn"`
+}
+
 // 全局配置变量
 var Conf *Config
 
@@ -150,6 +175,20 @@ func applyEnvOverrides() {
 	if dsn := os.Getenv("SECKILL_IDENTITY_MYSQL_DSN"); dsn != "" {
 		Conf.Identity.MySQLDSN = dsn
 	}
+	if dsn := os.Getenv("SECKILL_CART_MYSQL_DSN"); dsn != "" {
+		Conf.Cart.MySQLDSN = dsn
+	}
+	if dsn := os.Getenv("SECKILL_PAYMENT_MYSQL_DSN"); dsn != "" {
+		Conf.Payment.MySQLDSN = dsn
+	}
+	if secret := os.Getenv("SECKILL_PAYMENT_SECRET"); secret != "" {
+		Conf.Payment.Secret = secret
+	} else if secret := os.Getenv("SECKILL_MOCK_PAYMENT_SECRET"); secret != "" {
+		Conf.Payment.Secret = secret
+	}
+	if dsn := os.Getenv("SECKILL_FULFILLMENT_MYSQL_DSN"); dsn != "" {
+		Conf.Fulfillment.MySQLDSN = dsn
+	}
 
 	if secret := os.Getenv("SECKILL_JWT_SECRET"); secret != "" {
 		Conf.JWT.Secret = secret
@@ -188,6 +227,24 @@ func applyEnvOverrides() {
 	}
 	if serviceAddr := os.Getenv("SECKILL_ORDER_ADDR"); serviceAddr != "" {
 		Conf.Order.Address = serviceAddr
+	}
+	if serviceName := os.Getenv("SECKILL_CART_SERVICE"); serviceName != "" {
+		Conf.Cart.ServiceName = serviceName
+	}
+	if serviceAddr := os.Getenv("SECKILL_CART_ADDR"); serviceAddr != "" {
+		Conf.Cart.Address = serviceAddr
+	}
+	if serviceName := os.Getenv("SECKILL_PAYMENT_SERVICE"); serviceName != "" {
+		Conf.Payment.ServiceName = serviceName
+	}
+	if serviceAddr := os.Getenv("SECKILL_PAYMENT_ADDR"); serviceAddr != "" {
+		Conf.Payment.Address = serviceAddr
+	}
+	if serviceName := os.Getenv("SECKILL_FULFILLMENT_SERVICE"); serviceName != "" {
+		Conf.Fulfillment.ServiceName = serviceName
+	}
+	if serviceAddr := os.Getenv("SECKILL_FULFILLMENT_ADDR"); serviceAddr != "" {
+		Conf.Fulfillment.Address = serviceAddr
 	}
 	if store := os.Getenv("SECKILL_INVENTORY_STORE"); store != "" {
 		Conf.Inventory.Store = store

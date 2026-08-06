@@ -31,11 +31,12 @@
 
 ## 4. 阶段4：Identity、Cart、Payment、Fulfillment 服务
 
-- [ ] 4.1 提取 Identity Service，迁移用户、Token 和地址能力。
-- [ ] 4.2 提取 Cart Service，迁移购物车和结算预览能力。
-- [ ] 4.3 提取 Payment Service，迁移 Mock 支付、回调幂等和退款能力。
-- [ ] 4.4 提取 Fulfillment Service，迁移发货、收货和物流数据。
-- [ ] 4.5 阶段验收：注册到收货完整链路、支付回调重复、退款幂等和服务独立启动。
+- [√] 4.1 提取 Identity Service，迁移用户、Token 和地址能力。
+- [√] 4.2 提取 Cart Service，迁移购物车和结算预览能力。
+- [√] 4.3 提取 Payment Service，迁移 Mock 支付、回调幂等和退款能力。
+- [√] 4.4 提取 Fulfillment Service，迁移发货、收货和物流数据。
+- [√] 4.5 阶段验收：注册到收货完整链路、支付回调重复、退款幂等和服务独立启动。
+  > 备注: 已完成独立入口、配置和 Memory/Fake/bufconn 验收；Docker daemon 不可用，真实多进程与基础设施集成留待可用环境。
 
 ## 5. 阶段5：Outbox/Inbox 与 RabbitMQ
 
@@ -56,19 +57,20 @@
 
 ## 7. 安全检查
 
-- [ ] 7.1 检查服务端授权、PII/Token/支付签名日志、配置密钥和事件 payload。
-- [ ] 7.2 检查跨服务调用 deadline、幂等键、重试上限、DLQ 毒丸消息和库存补偿。
+- [√] 7.1 检查服务端授权、PII/Token/支付签名日志、配置密钥和事件 payload。
+- [√] 7.2 检查跨服务调用 deadline、幂等键、重试上限、DLQ 毒丸消息和库存补偿。
+  > 备注: 阶段 4 已完成同步 gRPC 路径的授权、deadline、幂等和恢复检查；RabbitMQ/DLQ 运行时检查仍属于阶段 5。
 
 ## 8. 文档更新
 
 - [√] 8.1 更新 `helloagents/wiki/arch.md`、`data.md`、`api.md` 和各模块文档。
-  > 备注: 已同步阶段 1 至阶段 3 的当前架构事实；后续服务拆分仍需增量更新。
+  > 备注: 已同步阶段 4 四个独立领域服务、Gateway 显式切流、数据所有权和阶段 5 消息边界。
 - [√] 8.2 更新 `README.md`、`helloagents/project.md`、`helloagents/CHANGELOG.md` 和历史索引。
-  > 备注: 已同步阶段 3 的启动方式、验收入口、迁移边界和 Docker 跳过项；最终收口阶段仍需继续维护。
+  > 备注: 已同步阶段 4 启动方式、验收入口、Go 临时目录和 Docker 跳过项。
 
 ## 9. 测试
 
-- [ ] 9.1 每个阶段运行 `go test ./...`、`go vet ./...`、必要范围的 `go test -race`。
-  > 备注: 阶段 1 至阶段 3 均已执行；阶段 4 以后需在各阶段继续执行。
-- [ ] 9.2 每个阶段运行 Fake/Memory E2E；Docker 可用时追加 MySQL、Redis、RabbitMQ 和 Compose 验收。
-  > 备注: 阶段 1 至阶段 3 已完成 Fake/Memory/bufconn 验收；真实基础设施和后续阶段验收待环境及实现就绪。
+- [√] 9.1 每个阶段运行 `go test ./...`、`go vet ./...`、必要范围的 `go test -race`。
+  > 备注: 阶段 4 已通过全仓测试、vet、race、格式检查和差异检查；后续阶段继续复用该门禁。
+- [√] 9.2 每个阶段运行 Fake/Memory E2E；Docker 可用时追加 MySQL、Redis、RabbitMQ 和 Compose 验收。
+  > 备注: 阶段 4 已完成 Memory/Fake/bufconn E2E 和 Compose 静态解析；真实基础设施因 Docker daemon 不可用跳过。

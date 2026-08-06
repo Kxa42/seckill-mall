@@ -27,12 +27,12 @@ type orderItemRequest struct {
 	Quantity int32  `json:"quantity"`
 }
 
-func registerOrderRoutes(router *gin.Engine, client pb.CommerceOrderServiceClient) {
+func registerOrderRoutes(router *gin.Engine, client pb.CommerceOrderServiceClient, cartClients ...pb.CartServiceClient) {
 	if client == nil {
 		return
 	}
 	authenticated := router.Group("/api/v1")
-	authenticated.Use(middleware.JWTAuth())
+	authenticated.Use(middleware.CommerceJWTAuth())
 	authenticated.POST("/orders", func(c *gin.Context) {
 		var request struct {
 			AddressID uint64             `json:"address_id"`
@@ -46,7 +46,14 @@ func registerOrderRoutes(router *gin.Engine, client pb.CommerceOrderServiceClien
 		if !ok {
 			return
 		}
-		response := createOrderRPC(c, client, &pb.OrderCreateRequest{IdempotencyKey: strings.TrimSpace(c.GetHeader("Idempotency-Key")), UserId: userID, AddressId: request.AddressID, OrderType: "normal", Items: orderItemsToProto(request.Items)})
+		items := request.Items
+		if len(items) == 0 && len(cartClients) > 0 && cartClients[0] != nil {
+			items = listCartForOrder(c, cartClients[0], userID)
+			if items == nil {
+				return
+			}
+		}
+		response := createOrderRPC(c, client, &pb.OrderCreateRequest{IdempotencyKey: strings.TrimSpace(c.GetHeader("Idempotency-Key")), UserId: userID, AddressId: request.AddressID, OrderType: "normal", Items: orderItemsToProto(items)})
 		if response == nil {
 			return
 		}
@@ -148,6 +155,26 @@ func registerOrderRoutes(router *gin.Engine, client pb.CommerceOrderServiceClien
 		}
 		httpx.OK(c, http.StatusOK, response)
 	})
+}
+
+func listCartForOrder(c *gin.Context, client pb.CartServiceClient, userID uint64) []orderItemRequest {
+	ctx, cancel := context.WithTimeout(c.Request.Context(), orderRPCTimeout)
+	defer cancel()
+	ctx = order.AppendSignedMetadata(ctx, os.Getenv("SECKILL_INTERNAL_CALL_SECRET"), pb.CartService_List_FullMethodName, userID, time.Now())
+	response, err := client.List(ctx, &pb.CartListRequest{UserId: userID})
+	if err != nil {
+		respondOrderRPCError(c, err)
+		return nil
+	}
+	items := make([]orderItemRequest, 0, len(response.GetItems()))
+	for _, item := range response.GetItems() {
+		items = append(items, orderItemRequest{SKUID: item.GetSkuId(), Quantity: item.GetQuantity()})
+	}
+	if len(items) == 0 {
+		httpx.Error(c, http.StatusBadRequest, "VALIDATION_ERROR", "购物车为空")
+		return nil
+	}
+	return items
 }
 
 func createOrderRPC(c *gin.Context, client pb.CommerceOrderServiceClient, request *pb.OrderCreateRequest) *pb.OrderCreateResponse {

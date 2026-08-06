@@ -1,13 +1,13 @@
 openapi: 3.0.3
 info:
   title: Seckill Mall Commerce API
-  version: 0.1.0
-  description: 后端完整商城 MVP API。金额字段均使用人民币分。
+  version: 0.4.0
+  description: 阶段 4 商城微服务 API。Gateway 显式路由 Identity、Catalog、Cart、Order、Payment 与 Fulfillment；金额字段均使用人民币分。
 servers:
   - url: http://127.0.0.1:8080/api/v1
     description: API Gateway
   - url: http://127.0.0.1:8081/api/v1
-    description: Commerce API 直连
+    description: Commerce API 迁移期兼容直连，仅用于尚未拆分的回退接口
 tags:
   - name: Auth
   - name: Address
@@ -15,6 +15,7 @@ tags:
   - name: Cart
   - name: Order
   - name: Payment
+  - name: Fulfillment
   - name: Admin
 paths:
   /auth/register:
@@ -85,9 +86,12 @@ paths:
                   - type: object
                     properties:
                       data:
-                        type: array
-                        items:
-                          $ref: '#/components/schemas/Address'
+                        type: object
+                        properties:
+                          items:
+                            type: array
+                            items:
+                              $ref: '#/components/schemas/Address'
     post:
       tags: [Address]
       operationId: createAddress
@@ -136,7 +140,7 @@ paths:
       security:
         - bearerAuth: []
       responses:
-        '204':
+        '200':
           description: 已删除地址
         '404':
           $ref: '#/components/responses/Error'
@@ -169,7 +173,7 @@ paths:
                 $ref: '#/components/schemas/ProductEnvelope'
         '404':
           $ref: '#/components/responses/Error'
-  /cart/items:
+  /cart:
     get:
       tags: [Cart]
       operationId: listCartItems
@@ -178,6 +182,7 @@ paths:
       responses:
         '200':
           description: 购物车
+  /cart/items:
     post:
       tags: [Cart]
       operationId: setCartItem
@@ -201,35 +206,15 @@ paths:
           type: integer
           format: int64
           minimum: 1
-    put:
-      tags: [Cart]
-      operationId: updateCartItem
-      security:
-        - bearerAuth: []
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              required: [quantity]
-              properties:
-                quantity:
-                  type: integer
-                  minimum: 1
-                  maximum: 99
-      responses:
-        '200':
-          description: 已更新购物车
     delete:
       tags: [Cart]
       operationId: deleteCartItem
       security:
         - bearerAuth: []
       responses:
-        '204':
+        '200':
           description: 已删除购物车商品
-  /cart/checkout-preview:
+  /cart/preview:
     get:
       tags: [Cart]
       operationId: previewCheckout
@@ -269,6 +254,11 @@ paths:
                   type: integer
                   format: int64
                   minimum: 1
+                items:
+                  type: array
+                  description: 可选；为空时 Gateway 读取当前用户 Cart
+                  items:
+                    $ref: '#/components/schemas/CartItemInput'
       responses:
         '201':
           description: 已创建待支付订单
@@ -345,7 +335,7 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/AdminProductInput'
+              type: object
               properties:
                 reason:
                   type: string
@@ -355,7 +345,7 @@ paths:
           description: 已取消并释放库存
         '409':
           $ref: '#/components/responses/Error'
-  /orders/{order_id}/confirm:
+  /orders/{order_id}/receipt:
     parameters:
       - $ref: '#/components/parameters/OrderID'
     post:
@@ -390,26 +380,20 @@ paths:
           description: Mock 退款已完成
         '409':
           $ref: '#/components/responses/Error'
-  /payments/mock:
+  /orders/{order_id}/payments:
+    parameters:
+      - $ref: '#/components/parameters/OrderID'
     post:
       tags: [Payment]
       operationId: createMockPayment
       security:
         - bearerAuth: []
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              required: [order_id]
-              properties:
-                order_id:
-                  type: string
       responses:
         '201':
           description: Mock 支付单和仅用于测试的回调签名
-  /payments/mock/callback:
+        '200':
+          description: 返回同一订单的幂等支付单
+  /payments/callback:
     post:
       tags: [Payment]
       operationId: completeMockPayment
@@ -431,6 +415,19 @@ paths:
         '200':
           description: 幂等完成支付并确认库存
         '401':
+          $ref: '#/components/responses/Error'
+  /orders/{order_id}/shipment:
+    parameters:
+      - $ref: '#/components/parameters/OrderID'
+    get:
+      tags: [Fulfillment]
+      operationId: getShipment
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: 当前用户订单的物流信息
+        '404':
           $ref: '#/components/responses/Error'
   /admin/products:
     post:
@@ -583,14 +580,14 @@ components:
       properties:
         access_token:
           type: string
-        access_expires_at:
-          type: string
-          format: date-time
+        access_expires_at_unix:
+          type: integer
+          format: int64
         refresh_token:
           type: string
-        refresh_expires_at:
-          type: string
-          format: date-time
+        refresh_expires_at_unix:
+          type: integer
+          format: int64
         user:
           $ref: '#/components/schemas/User'
     AddressInput:
@@ -624,6 +621,9 @@ components:
           required: [id]
           properties:
             id:
+              type: integer
+              format: int64
+            user_id:
               type: integer
               format: int64
     CartItemInput:
@@ -755,10 +755,13 @@ components:
               $ref: '#/components/schemas/Product'
     Order:
       type: object
-      required: [order_id, order_type, status, total_amount_cents, address, items, expires_at]
+      required: [order_id, user_id, order_type, status, total_amount_cents]
       properties:
         order_id:
           type: string
+        user_id:
+          type: integer
+          format: int64
         order_type:
           type: string
           enum: [normal, seckill]
@@ -769,25 +772,6 @@ components:
           type: integer
           format: int64
           minimum: 0
-        address:
-          $ref: '#/components/schemas/Address'
-        items:
-          type: array
-          items:
-            type: object
-        payment:
-          type: object
-          nullable: true
-        shipment:
-          type: object
-          nullable: true
-        status_history:
-          type: array
-          items:
-            type: object
-        expires_at:
-          type: string
-          format: date-time
     OrderEnvelope:
       allOf:
         - $ref: '#/components/schemas/Envelope'

@@ -1,0 +1,18 @@
+# Payment Service 的本地配置；支付签名密钥必须通过环境变量注入。
+server:
+  name: "payment-service"
+  mode: "debug"
+  port: "51006"
+
+payment:
+  service_name: "payment-service"
+  address: "127.0.0.1:51006"
+  mysql_dsn: ""
+  secret: ""
+
+order:
+  service_name: "order-service"
+  address: "127.0.0.1:51005"
+
+etcd:
+  addr: "127.0.0.1:2379"

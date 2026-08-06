@@ -60,6 +60,7 @@ services:
     mysql_dsn: "${PAYMENT_MYSQL_DSN}"
     rabbitmq_url: "${PAYMENT_RABBITMQ_URL}"
     etcd_addr: 127.0.0.1:2379
+    secret: "${PAYMENT_SECRET}"
 
   fulfillment:
     name: fulfillment-service

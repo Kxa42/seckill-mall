@@ -25,3 +25,19 @@ inventory:
 order:
   service_name: "order-service"
   address: "127.0.0.1:51005"
+
+identity:
+  service_name: "identity-service"
+  address: "127.0.0.1:51001"
+
+cart:
+  service_name: "cart-service"
+  address: "127.0.0.1:51004"
+
+payment:
+  service_name: "payment-service"
+  address: "127.0.0.1:51006"
+
+fulfillment:
+  service_name: "fulfillment-service"
+  address: "127.0.0.1:51007"

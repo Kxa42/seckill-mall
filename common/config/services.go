@@ -24,6 +24,7 @@ type ServiceDefinition struct {
 	RedisPassword string `mapstructure:"redis_password"`
 	RedisDB       int    `mapstructure:"redis_db"`
 	Store         string `mapstructure:"store"`
+	Secret        string `mapstructure:"secret"`
 	PurchaseLimit int32  `mapstructure:"purchase_limit"`
 	// MetricsPort 为可选；留空则不启动独立 metrics server。
 	MetricsPort string `mapstructure:"metrics_port"`
@@ -90,7 +91,7 @@ func LoadServiceRuntimeConfig(path, role string) (*Config, error) {
 		cfg.Commerce.URL = manifest.Gateway.CommerceURL
 		cfg.JWT.Expire = strings.TrimSpace(manifest.Gateway.JWT.Expire)
 		cfg.JWT.Secret = strings.TrimSpace(manifest.Gateway.JWT.Secret)
-		for _, serviceRole := range []string{"catalog", "inventory", "order"} {
+		for _, serviceRole := range []string{"identity", "catalog", "inventory", "cart", "order", "payment", "fulfillment"} {
 			definition, ok := manifest.Services[serviceRole]
 			if !ok {
 				return nil, fmt.Errorf("service %q is missing from configuration", serviceRole)
@@ -107,6 +108,18 @@ func LoadServiceRuntimeConfig(path, role string) (*Config, error) {
 			} else if serviceRole == "inventory" {
 				cfg.Inventory.ServiceName = definition.Name
 				cfg.Inventory.Address = definition.Address
+			} else if serviceRole == "identity" {
+				cfg.Identity.ServiceName = definition.Name
+				cfg.Identity.Address = definition.Address
+			} else if serviceRole == "cart" {
+				cfg.Cart.ServiceName = definition.Name
+				cfg.Cart.Address = definition.Address
+			} else if serviceRole == "payment" {
+				cfg.Payment.ServiceName = definition.Name
+				cfg.Payment.Address = definition.Address
+			} else if serviceRole == "fulfillment" {
+				cfg.Fulfillment.ServiceName = definition.Name
+				cfg.Fulfillment.Address = definition.Address
 			} else {
 				cfg.Order.ServiceName = definition.Name
 				cfg.Order.Address = definition.Address
@@ -174,6 +187,45 @@ func LoadServiceRuntimeConfig(path, role string) (*Config, error) {
 				cfg.Inventory = InventoryConfig{ServiceName: dependencyDefinition.Name, Address: dependencyDefinition.Address}
 			}
 		}
+	case "cart":
+		cfg.Cart = CartConfig{ServiceName: definition.Name, Address: definition.Address, MySQLDSN: definition.MySQLDSN}
+		dependencyDefinition, exists := manifest.Services["catalog"]
+		if !exists {
+			return nil, fmt.Errorf("service %q is missing from configuration", "catalog")
+		}
+		if err := expandDiscoveryDefinition(&dependencyDefinition); err != nil {
+			return nil, fmt.Errorf("service %q configuration: %w", "catalog", err)
+		}
+		if err := validateDiscoveryDefinition("catalog", dependencyDefinition); err != nil {
+			return nil, err
+		}
+		cfg.Catalog = CatalogConfig{ServiceName: dependencyDefinition.Name, Address: dependencyDefinition.Address}
+	case "payment":
+		cfg.Payment = PaymentConfig{ServiceName: definition.Name, Address: definition.Address, MySQLDSN: definition.MySQLDSN, Secret: definition.Secret}
+		dependencyDefinition, exists := manifest.Services["order"]
+		if !exists {
+			return nil, fmt.Errorf("service %q is missing from configuration", "order")
+		}
+		if err := expandDiscoveryDefinition(&dependencyDefinition); err != nil {
+			return nil, fmt.Errorf("service %q configuration: %w", "order", err)
+		}
+		if err := validateDiscoveryDefinition("order", dependencyDefinition); err != nil {
+			return nil, err
+		}
+		cfg.Order = OrderConfig{ServiceName: dependencyDefinition.Name, Address: dependencyDefinition.Address}
+	case "fulfillment":
+		cfg.Fulfillment = FulfillmentConfig{ServiceName: definition.Name, Address: definition.Address, MySQLDSN: definition.MySQLDSN}
+		dependencyDefinition, exists := manifest.Services["order"]
+		if !exists {
+			return nil, fmt.Errorf("service %q is missing from configuration", "order")
+		}
+		if err := expandDiscoveryDefinition(&dependencyDefinition); err != nil {
+			return nil, fmt.Errorf("service %q configuration: %w", "order", err)
+		}
+		if err := validateDiscoveryDefinition("order", dependencyDefinition); err != nil {
+			return nil, err
+		}
+		cfg.Order = OrderConfig{ServiceName: dependencyDefinition.Name, Address: dependencyDefinition.Address}
 	}
 	return cfg, nil
 }
@@ -206,6 +258,7 @@ func expandServiceDefinition(definition *ServiceDefinition) error {
 		"rabbitmq_url":   &definition.RabbitMQURL,
 		"redis_addr":     &definition.RedisAddr,
 		"redis_password": &definition.RedisPassword,
+		"secret":         &definition.Secret,
 	}
 	for name, value := range optionalFields {
 		expanded, err := expandOptionalEnv(value)

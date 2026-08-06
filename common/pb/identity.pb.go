@@ -173,6 +173,650 @@ func (x *IdentityAddressSnapshot) GetDetail() string {
 	return ""
 }
 
+type IdentityUser struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Id            uint64                 `protobuf:"varint,1,opt,name=id,proto3" json:"id,omitempty"`
+	Email         string                 `protobuf:"bytes,2,opt,name=email,proto3" json:"email,omitempty"`
+	Role          string                 `protobuf:"bytes,3,opt,name=role,proto3" json:"role,omitempty"`
+	Status        string                 `protobuf:"bytes,4,opt,name=status,proto3" json:"status,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *IdentityUser) Reset() {
+	*x = IdentityUser{}
+	mi := &file_proto_commerce_identity_proto_msgTypes[2]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *IdentityUser) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*IdentityUser) ProtoMessage() {}
+
+func (x *IdentityUser) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_commerce_identity_proto_msgTypes[2]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use IdentityUser.ProtoReflect.Descriptor instead.
+func (*IdentityUser) Descriptor() ([]byte, []int) {
+	return file_proto_commerce_identity_proto_rawDescGZIP(), []int{2}
+}
+
+func (x *IdentityUser) GetId() uint64 {
+	if x != nil {
+		return x.Id
+	}
+	return 0
+}
+
+func (x *IdentityUser) GetEmail() string {
+	if x != nil {
+		return x.Email
+	}
+	return ""
+}
+
+func (x *IdentityUser) GetRole() string {
+	if x != nil {
+		return x.Role
+	}
+	return ""
+}
+
+func (x *IdentityUser) GetStatus() string {
+	if x != nil {
+		return x.Status
+	}
+	return ""
+}
+
+type IdentityTokenPair struct {
+	state                protoimpl.MessageState `protogen:"open.v1"`
+	AccessToken          string                 `protobuf:"bytes,1,opt,name=access_token,json=accessToken,proto3" json:"access_token,omitempty"`
+	AccessExpiresAtUnix  int64                  `protobuf:"varint,2,opt,name=access_expires_at_unix,json=accessExpiresAtUnix,proto3" json:"access_expires_at_unix,omitempty"`
+	RefreshToken         string                 `protobuf:"bytes,3,opt,name=refresh_token,json=refreshToken,proto3" json:"refresh_token,omitempty"`
+	RefreshExpiresAtUnix int64                  `protobuf:"varint,4,opt,name=refresh_expires_at_unix,json=refreshExpiresAtUnix,proto3" json:"refresh_expires_at_unix,omitempty"`
+	User                 *IdentityUser          `protobuf:"bytes,5,opt,name=user,proto3" json:"user,omitempty"`
+	unknownFields        protoimpl.UnknownFields
+	sizeCache            protoimpl.SizeCache
+}
+
+func (x *IdentityTokenPair) Reset() {
+	*x = IdentityTokenPair{}
+	mi := &file_proto_commerce_identity_proto_msgTypes[3]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *IdentityTokenPair) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*IdentityTokenPair) ProtoMessage() {}
+
+func (x *IdentityTokenPair) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_commerce_identity_proto_msgTypes[3]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use IdentityTokenPair.ProtoReflect.Descriptor instead.
+func (*IdentityTokenPair) Descriptor() ([]byte, []int) {
+	return file_proto_commerce_identity_proto_rawDescGZIP(), []int{3}
+}
+
+func (x *IdentityTokenPair) GetAccessToken() string {
+	if x != nil {
+		return x.AccessToken
+	}
+	return ""
+}
+
+func (x *IdentityTokenPair) GetAccessExpiresAtUnix() int64 {
+	if x != nil {
+		return x.AccessExpiresAtUnix
+	}
+	return 0
+}
+
+func (x *IdentityTokenPair) GetRefreshToken() string {
+	if x != nil {
+		return x.RefreshToken
+	}
+	return ""
+}
+
+func (x *IdentityTokenPair) GetRefreshExpiresAtUnix() int64 {
+	if x != nil {
+		return x.RefreshExpiresAtUnix
+	}
+	return 0
+}
+
+func (x *IdentityTokenPair) GetUser() *IdentityUser {
+	if x != nil {
+		return x.User
+	}
+	return nil
+}
+
+type IdentityCredentialsRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Email         string                 `protobuf:"bytes,1,opt,name=email,proto3" json:"email,omitempty"`
+	Password      string                 `protobuf:"bytes,2,opt,name=password,proto3" json:"password,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *IdentityCredentialsRequest) Reset() {
+	*x = IdentityCredentialsRequest{}
+	mi := &file_proto_commerce_identity_proto_msgTypes[4]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *IdentityCredentialsRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*IdentityCredentialsRequest) ProtoMessage() {}
+
+func (x *IdentityCredentialsRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_commerce_identity_proto_msgTypes[4]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use IdentityCredentialsRequest.ProtoReflect.Descriptor instead.
+func (*IdentityCredentialsRequest) Descriptor() ([]byte, []int) {
+	return file_proto_commerce_identity_proto_rawDescGZIP(), []int{4}
+}
+
+func (x *IdentityCredentialsRequest) GetEmail() string {
+	if x != nil {
+		return x.Email
+	}
+	return ""
+}
+
+func (x *IdentityCredentialsRequest) GetPassword() string {
+	if x != nil {
+		return x.Password
+	}
+	return ""
+}
+
+type IdentityRefreshRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	RefreshToken  string                 `protobuf:"bytes,1,opt,name=refresh_token,json=refreshToken,proto3" json:"refresh_token,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *IdentityRefreshRequest) Reset() {
+	*x = IdentityRefreshRequest{}
+	mi := &file_proto_commerce_identity_proto_msgTypes[5]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *IdentityRefreshRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*IdentityRefreshRequest) ProtoMessage() {}
+
+func (x *IdentityRefreshRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_commerce_identity_proto_msgTypes[5]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use IdentityRefreshRequest.ProtoReflect.Descriptor instead.
+func (*IdentityRefreshRequest) Descriptor() ([]byte, []int) {
+	return file_proto_commerce_identity_proto_rawDescGZIP(), []int{5}
+}
+
+func (x *IdentityRefreshRequest) GetRefreshToken() string {
+	if x != nil {
+		return x.RefreshToken
+	}
+	return ""
+}
+
+type IdentityAddress struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Id            uint64                 `protobuf:"varint,1,opt,name=id,proto3" json:"id,omitempty"`
+	UserId        uint64                 `protobuf:"varint,2,opt,name=user_id,json=userId,proto3" json:"user_id,omitempty"`
+	Recipient     string                 `protobuf:"bytes,3,opt,name=recipient,proto3" json:"recipient,omitempty"`
+	Phone         string                 `protobuf:"bytes,4,opt,name=phone,proto3" json:"phone,omitempty"`
+	Province      string                 `protobuf:"bytes,5,opt,name=province,proto3" json:"province,omitempty"`
+	City          string                 `protobuf:"bytes,6,opt,name=city,proto3" json:"city,omitempty"`
+	District      string                 `protobuf:"bytes,7,opt,name=district,proto3" json:"district,omitempty"`
+	Detail        string                 `protobuf:"bytes,8,opt,name=detail,proto3" json:"detail,omitempty"`
+	IsDefault     bool                   `protobuf:"varint,9,opt,name=is_default,json=isDefault,proto3" json:"is_default,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *IdentityAddress) Reset() {
+	*x = IdentityAddress{}
+	mi := &file_proto_commerce_identity_proto_msgTypes[6]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *IdentityAddress) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*IdentityAddress) ProtoMessage() {}
+
+func (x *IdentityAddress) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_commerce_identity_proto_msgTypes[6]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use IdentityAddress.ProtoReflect.Descriptor instead.
+func (*IdentityAddress) Descriptor() ([]byte, []int) {
+	return file_proto_commerce_identity_proto_rawDescGZIP(), []int{6}
+}
+
+func (x *IdentityAddress) GetId() uint64 {
+	if x != nil {
+		return x.Id
+	}
+	return 0
+}
+
+func (x *IdentityAddress) GetUserId() uint64 {
+	if x != nil {
+		return x.UserId
+	}
+	return 0
+}
+
+func (x *IdentityAddress) GetRecipient() string {
+	if x != nil {
+		return x.Recipient
+	}
+	return ""
+}
+
+func (x *IdentityAddress) GetPhone() string {
+	if x != nil {
+		return x.Phone
+	}
+	return ""
+}
+
+func (x *IdentityAddress) GetProvince() string {
+	if x != nil {
+		return x.Province
+	}
+	return ""
+}
+
+func (x *IdentityAddress) GetCity() string {
+	if x != nil {
+		return x.City
+	}
+	return ""
+}
+
+func (x *IdentityAddress) GetDistrict() string {
+	if x != nil {
+		return x.District
+	}
+	return ""
+}
+
+func (x *IdentityAddress) GetDetail() string {
+	if x != nil {
+		return x.Detail
+	}
+	return ""
+}
+
+func (x *IdentityAddress) GetIsDefault() bool {
+	if x != nil {
+		return x.IsDefault
+	}
+	return false
+}
+
+type IdentityAddressCreateRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	UserId        uint64                 `protobuf:"varint,1,opt,name=user_id,json=userId,proto3" json:"user_id,omitempty"`
+	Address       *IdentityAddress       `protobuf:"bytes,2,opt,name=address,proto3" json:"address,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *IdentityAddressCreateRequest) Reset() {
+	*x = IdentityAddressCreateRequest{}
+	mi := &file_proto_commerce_identity_proto_msgTypes[7]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *IdentityAddressCreateRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*IdentityAddressCreateRequest) ProtoMessage() {}
+
+func (x *IdentityAddressCreateRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_commerce_identity_proto_msgTypes[7]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use IdentityAddressCreateRequest.ProtoReflect.Descriptor instead.
+func (*IdentityAddressCreateRequest) Descriptor() ([]byte, []int) {
+	return file_proto_commerce_identity_proto_rawDescGZIP(), []int{7}
+}
+
+func (x *IdentityAddressCreateRequest) GetUserId() uint64 {
+	if x != nil {
+		return x.UserId
+	}
+	return 0
+}
+
+func (x *IdentityAddressCreateRequest) GetAddress() *IdentityAddress {
+	if x != nil {
+		return x.Address
+	}
+	return nil
+}
+
+type IdentityAddressUpdateRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	UserId        uint64                 `protobuf:"varint,1,opt,name=user_id,json=userId,proto3" json:"user_id,omitempty"`
+	AddressId     uint64                 `protobuf:"varint,2,opt,name=address_id,json=addressId,proto3" json:"address_id,omitempty"`
+	Address       *IdentityAddress       `protobuf:"bytes,3,opt,name=address,proto3" json:"address,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *IdentityAddressUpdateRequest) Reset() {
+	*x = IdentityAddressUpdateRequest{}
+	mi := &file_proto_commerce_identity_proto_msgTypes[8]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *IdentityAddressUpdateRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*IdentityAddressUpdateRequest) ProtoMessage() {}
+
+func (x *IdentityAddressUpdateRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_commerce_identity_proto_msgTypes[8]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use IdentityAddressUpdateRequest.ProtoReflect.Descriptor instead.
+func (*IdentityAddressUpdateRequest) Descriptor() ([]byte, []int) {
+	return file_proto_commerce_identity_proto_rawDescGZIP(), []int{8}
+}
+
+func (x *IdentityAddressUpdateRequest) GetUserId() uint64 {
+	if x != nil {
+		return x.UserId
+	}
+	return 0
+}
+
+func (x *IdentityAddressUpdateRequest) GetAddressId() uint64 {
+	if x != nil {
+		return x.AddressId
+	}
+	return 0
+}
+
+func (x *IdentityAddressUpdateRequest) GetAddress() *IdentityAddress {
+	if x != nil {
+		return x.Address
+	}
+	return nil
+}
+
+type IdentityAddressDeleteRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	UserId        uint64                 `protobuf:"varint,1,opt,name=user_id,json=userId,proto3" json:"user_id,omitempty"`
+	AddressId     uint64                 `protobuf:"varint,2,opt,name=address_id,json=addressId,proto3" json:"address_id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *IdentityAddressDeleteRequest) Reset() {
+	*x = IdentityAddressDeleteRequest{}
+	mi := &file_proto_commerce_identity_proto_msgTypes[9]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *IdentityAddressDeleteRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*IdentityAddressDeleteRequest) ProtoMessage() {}
+
+func (x *IdentityAddressDeleteRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_commerce_identity_proto_msgTypes[9]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use IdentityAddressDeleteRequest.ProtoReflect.Descriptor instead.
+func (*IdentityAddressDeleteRequest) Descriptor() ([]byte, []int) {
+	return file_proto_commerce_identity_proto_rawDescGZIP(), []int{9}
+}
+
+func (x *IdentityAddressDeleteRequest) GetUserId() uint64 {
+	if x != nil {
+		return x.UserId
+	}
+	return 0
+}
+
+func (x *IdentityAddressDeleteRequest) GetAddressId() uint64 {
+	if x != nil {
+		return x.AddressId
+	}
+	return 0
+}
+
+type IdentityAddressDeleteResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Deleted       bool                   `protobuf:"varint,1,opt,name=deleted,proto3" json:"deleted,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *IdentityAddressDeleteResponse) Reset() {
+	*x = IdentityAddressDeleteResponse{}
+	mi := &file_proto_commerce_identity_proto_msgTypes[10]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *IdentityAddressDeleteResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*IdentityAddressDeleteResponse) ProtoMessage() {}
+
+func (x *IdentityAddressDeleteResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_commerce_identity_proto_msgTypes[10]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use IdentityAddressDeleteResponse.ProtoReflect.Descriptor instead.
+func (*IdentityAddressDeleteResponse) Descriptor() ([]byte, []int) {
+	return file_proto_commerce_identity_proto_rawDescGZIP(), []int{10}
+}
+
+func (x *IdentityAddressDeleteResponse) GetDeleted() bool {
+	if x != nil {
+		return x.Deleted
+	}
+	return false
+}
+
+type IdentityAddressListRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	UserId        uint64                 `protobuf:"varint,1,opt,name=user_id,json=userId,proto3" json:"user_id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *IdentityAddressListRequest) Reset() {
+	*x = IdentityAddressListRequest{}
+	mi := &file_proto_commerce_identity_proto_msgTypes[11]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *IdentityAddressListRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*IdentityAddressListRequest) ProtoMessage() {}
+
+func (x *IdentityAddressListRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_commerce_identity_proto_msgTypes[11]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use IdentityAddressListRequest.ProtoReflect.Descriptor instead.
+func (*IdentityAddressListRequest) Descriptor() ([]byte, []int) {
+	return file_proto_commerce_identity_proto_rawDescGZIP(), []int{11}
+}
+
+func (x *IdentityAddressListRequest) GetUserId() uint64 {
+	if x != nil {
+		return x.UserId
+	}
+	return 0
+}
+
+type IdentityAddressListResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Items         []*IdentityAddress     `protobuf:"bytes,1,rep,name=items,proto3" json:"items,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *IdentityAddressListResponse) Reset() {
+	*x = IdentityAddressListResponse{}
+	mi := &file_proto_commerce_identity_proto_msgTypes[12]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *IdentityAddressListResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*IdentityAddressListResponse) ProtoMessage() {}
+
+func (x *IdentityAddressListResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_commerce_identity_proto_msgTypes[12]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use IdentityAddressListResponse.ProtoReflect.Descriptor instead.
+func (*IdentityAddressListResponse) Descriptor() ([]byte, []int) {
+	return file_proto_commerce_identity_proto_rawDescGZIP(), []int{12}
+}
+
+func (x *IdentityAddressListResponse) GetItems() []*IdentityAddress {
+	if x != nil {
+		return x.Items
+	}
+	return nil
+}
+
 var File_proto_commerce_identity_proto protoreflect.FileDescriptor
 
 const file_proto_commerce_identity_proto_rawDesc = "" +
@@ -191,8 +835,60 @@ const file_proto_commerce_identity_proto_rawDesc = "" +
 	"\bprovince\x18\x05 \x01(\tR\bprovince\x12\x12\n" +
 	"\x04city\x18\x06 \x01(\tR\x04city\x12\x1a\n" +
 	"\bdistrict\x18\a \x01(\tR\bdistrict\x12\x16\n" +
-	"\x06detail\x18\b \x01(\tR\x06detail2\x8c\x01\n" +
-	"\x0fIdentityService\x12y\n" +
+	"\x06detail\x18\b \x01(\tR\x06detail\"`\n" +
+	"\fIdentityUser\x12\x0e\n" +
+	"\x02id\x18\x01 \x01(\x04R\x02id\x12\x14\n" +
+	"\x05email\x18\x02 \x01(\tR\x05email\x12\x12\n" +
+	"\x04role\x18\x03 \x01(\tR\x04role\x12\x16\n" +
+	"\x06status\x18\x04 \x01(\tR\x06status\"\xff\x01\n" +
+	"\x11IdentityTokenPair\x12!\n" +
+	"\faccess_token\x18\x01 \x01(\tR\vaccessToken\x123\n" +
+	"\x16access_expires_at_unix\x18\x02 \x01(\x03R\x13accessExpiresAtUnix\x12#\n" +
+	"\rrefresh_token\x18\x03 \x01(\tR\frefreshToken\x125\n" +
+	"\x17refresh_expires_at_unix\x18\x04 \x01(\x03R\x14refreshExpiresAtUnix\x126\n" +
+	"\x04user\x18\x05 \x01(\v2\".commerce.identity.v1.IdentityUserR\x04user\"N\n" +
+	"\x1aIdentityCredentialsRequest\x12\x14\n" +
+	"\x05email\x18\x01 \x01(\tR\x05email\x12\x1a\n" +
+	"\bpassword\x18\x02 \x01(\tR\bpassword\"=\n" +
+	"\x16IdentityRefreshRequest\x12#\n" +
+	"\rrefresh_token\x18\x01 \x01(\tR\frefreshToken\"\xf1\x01\n" +
+	"\x0fIdentityAddress\x12\x0e\n" +
+	"\x02id\x18\x01 \x01(\x04R\x02id\x12\x17\n" +
+	"\auser_id\x18\x02 \x01(\x04R\x06userId\x12\x1c\n" +
+	"\trecipient\x18\x03 \x01(\tR\trecipient\x12\x14\n" +
+	"\x05phone\x18\x04 \x01(\tR\x05phone\x12\x1a\n" +
+	"\bprovince\x18\x05 \x01(\tR\bprovince\x12\x12\n" +
+	"\x04city\x18\x06 \x01(\tR\x04city\x12\x1a\n" +
+	"\bdistrict\x18\a \x01(\tR\bdistrict\x12\x16\n" +
+	"\x06detail\x18\b \x01(\tR\x06detail\x12\x1d\n" +
+	"\n" +
+	"is_default\x18\t \x01(\bR\tisDefault\"x\n" +
+	"\x1cIdentityAddressCreateRequest\x12\x17\n" +
+	"\auser_id\x18\x01 \x01(\x04R\x06userId\x12?\n" +
+	"\aaddress\x18\x02 \x01(\v2%.commerce.identity.v1.IdentityAddressR\aaddress\"\x97\x01\n" +
+	"\x1cIdentityAddressUpdateRequest\x12\x17\n" +
+	"\auser_id\x18\x01 \x01(\x04R\x06userId\x12\x1d\n" +
+	"\n" +
+	"address_id\x18\x02 \x01(\x04R\taddressId\x12?\n" +
+	"\aaddress\x18\x03 \x01(\v2%.commerce.identity.v1.IdentityAddressR\aaddress\"V\n" +
+	"\x1cIdentityAddressDeleteRequest\x12\x17\n" +
+	"\auser_id\x18\x01 \x01(\x04R\x06userId\x12\x1d\n" +
+	"\n" +
+	"address_id\x18\x02 \x01(\x04R\taddressId\"9\n" +
+	"\x1dIdentityAddressDeleteResponse\x12\x18\n" +
+	"\adeleted\x18\x01 \x01(\bR\adeleted\"5\n" +
+	"\x1aIdentityAddressListRequest\x12\x17\n" +
+	"\auser_id\x18\x01 \x01(\x04R\x06userId\"Z\n" +
+	"\x1bIdentityAddressListResponse\x12;\n" +
+	"\x05items\x18\x01 \x03(\v2%.commerce.identity.v1.IdentityAddressR\x05items2\x81\a\n" +
+	"\x0fIdentityService\x12e\n" +
+	"\bRegister\x120.commerce.identity.v1.IdentityCredentialsRequest\x1a'.commerce.identity.v1.IdentityTokenPair\x12b\n" +
+	"\x05Login\x120.commerce.identity.v1.IdentityCredentialsRequest\x1a'.commerce.identity.v1.IdentityTokenPair\x12`\n" +
+	"\aRefresh\x12,.commerce.identity.v1.IdentityRefreshRequest\x1a'.commerce.identity.v1.IdentityTokenPair\x12j\n" +
+	"\rCreateAddress\x122.commerce.identity.v1.IdentityAddressCreateRequest\x1a%.commerce.identity.v1.IdentityAddress\x12j\n" +
+	"\rUpdateAddress\x122.commerce.identity.v1.IdentityAddressUpdateRequest\x1a%.commerce.identity.v1.IdentityAddress\x12x\n" +
+	"\rDeleteAddress\x122.commerce.identity.v1.IdentityAddressDeleteRequest\x1a3.commerce.identity.v1.IdentityAddressDeleteResponse\x12t\n" +
+	"\rListAddresses\x120.commerce.identity.v1.IdentityAddressListRequest\x1a1.commerce.identity.v1.IdentityAddressListResponse\x12y\n" +
 	"\x12GetAddressSnapshot\x124.commerce.identity.v1.IdentityAddressSnapshotRequest\x1a-.commerce.identity.v1.IdentityAddressSnapshotB\x1bZ\x19seckill-mall/common/pb;pbb\x06proto3"
 
 var (
@@ -207,19 +903,48 @@ func file_proto_commerce_identity_proto_rawDescGZIP() []byte {
 	return file_proto_commerce_identity_proto_rawDescData
 }
 
-var file_proto_commerce_identity_proto_msgTypes = make([]protoimpl.MessageInfo, 2)
+var file_proto_commerce_identity_proto_msgTypes = make([]protoimpl.MessageInfo, 13)
 var file_proto_commerce_identity_proto_goTypes = []any{
 	(*IdentityAddressSnapshotRequest)(nil), // 0: commerce.identity.v1.IdentityAddressSnapshotRequest
 	(*IdentityAddressSnapshot)(nil),        // 1: commerce.identity.v1.IdentityAddressSnapshot
+	(*IdentityUser)(nil),                   // 2: commerce.identity.v1.IdentityUser
+	(*IdentityTokenPair)(nil),              // 3: commerce.identity.v1.IdentityTokenPair
+	(*IdentityCredentialsRequest)(nil),     // 4: commerce.identity.v1.IdentityCredentialsRequest
+	(*IdentityRefreshRequest)(nil),         // 5: commerce.identity.v1.IdentityRefreshRequest
+	(*IdentityAddress)(nil),                // 6: commerce.identity.v1.IdentityAddress
+	(*IdentityAddressCreateRequest)(nil),   // 7: commerce.identity.v1.IdentityAddressCreateRequest
+	(*IdentityAddressUpdateRequest)(nil),   // 8: commerce.identity.v1.IdentityAddressUpdateRequest
+	(*IdentityAddressDeleteRequest)(nil),   // 9: commerce.identity.v1.IdentityAddressDeleteRequest
+	(*IdentityAddressDeleteResponse)(nil),  // 10: commerce.identity.v1.IdentityAddressDeleteResponse
+	(*IdentityAddressListRequest)(nil),     // 11: commerce.identity.v1.IdentityAddressListRequest
+	(*IdentityAddressListResponse)(nil),    // 12: commerce.identity.v1.IdentityAddressListResponse
 }
 var file_proto_commerce_identity_proto_depIdxs = []int32{
-	0, // 0: commerce.identity.v1.IdentityService.GetAddressSnapshot:input_type -> commerce.identity.v1.IdentityAddressSnapshotRequest
-	1, // 1: commerce.identity.v1.IdentityService.GetAddressSnapshot:output_type -> commerce.identity.v1.IdentityAddressSnapshot
-	1, // [1:2] is the sub-list for method output_type
-	0, // [0:1] is the sub-list for method input_type
-	0, // [0:0] is the sub-list for extension type_name
-	0, // [0:0] is the sub-list for extension extendee
-	0, // [0:0] is the sub-list for field type_name
+	2,  // 0: commerce.identity.v1.IdentityTokenPair.user:type_name -> commerce.identity.v1.IdentityUser
+	6,  // 1: commerce.identity.v1.IdentityAddressCreateRequest.address:type_name -> commerce.identity.v1.IdentityAddress
+	6,  // 2: commerce.identity.v1.IdentityAddressUpdateRequest.address:type_name -> commerce.identity.v1.IdentityAddress
+	6,  // 3: commerce.identity.v1.IdentityAddressListResponse.items:type_name -> commerce.identity.v1.IdentityAddress
+	4,  // 4: commerce.identity.v1.IdentityService.Register:input_type -> commerce.identity.v1.IdentityCredentialsRequest
+	4,  // 5: commerce.identity.v1.IdentityService.Login:input_type -> commerce.identity.v1.IdentityCredentialsRequest
+	5,  // 6: commerce.identity.v1.IdentityService.Refresh:input_type -> commerce.identity.v1.IdentityRefreshRequest
+	7,  // 7: commerce.identity.v1.IdentityService.CreateAddress:input_type -> commerce.identity.v1.IdentityAddressCreateRequest
+	8,  // 8: commerce.identity.v1.IdentityService.UpdateAddress:input_type -> commerce.identity.v1.IdentityAddressUpdateRequest
+	9,  // 9: commerce.identity.v1.IdentityService.DeleteAddress:input_type -> commerce.identity.v1.IdentityAddressDeleteRequest
+	11, // 10: commerce.identity.v1.IdentityService.ListAddresses:input_type -> commerce.identity.v1.IdentityAddressListRequest
+	0,  // 11: commerce.identity.v1.IdentityService.GetAddressSnapshot:input_type -> commerce.identity.v1.IdentityAddressSnapshotRequest
+	3,  // 12: commerce.identity.v1.IdentityService.Register:output_type -> commerce.identity.v1.IdentityTokenPair
+	3,  // 13: commerce.identity.v1.IdentityService.Login:output_type -> commerce.identity.v1.IdentityTokenPair
+	3,  // 14: commerce.identity.v1.IdentityService.Refresh:output_type -> commerce.identity.v1.IdentityTokenPair
+	6,  // 15: commerce.identity.v1.IdentityService.CreateAddress:output_type -> commerce.identity.v1.IdentityAddress
+	6,  // 16: commerce.identity.v1.IdentityService.UpdateAddress:output_type -> commerce.identity.v1.IdentityAddress
+	10, // 17: commerce.identity.v1.IdentityService.DeleteAddress:output_type -> commerce.identity.v1.IdentityAddressDeleteResponse
+	12, // 18: commerce.identity.v1.IdentityService.ListAddresses:output_type -> commerce.identity.v1.IdentityAddressListResponse
+	1,  // 19: commerce.identity.v1.IdentityService.GetAddressSnapshot:output_type -> commerce.identity.v1.IdentityAddressSnapshot
+	12, // [12:20] is the sub-list for method output_type
+	4,  // [4:12] is the sub-list for method input_type
+	4,  // [4:4] is the sub-list for extension type_name
+	4,  // [4:4] is the sub-list for extension extendee
+	0,  // [0:4] is the sub-list for field type_name
 }
 
 func init() { file_proto_commerce_identity_proto_init() }
@@ -233,7 +958,7 @@ func file_proto_commerce_identity_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_proto_commerce_identity_proto_rawDesc), len(file_proto_commerce_identity_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   2,
+			NumMessages:   13,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

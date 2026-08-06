@@ -11,12 +11,45 @@ message CartListRequest {
 message CartItem {
   uint64 sku_id = 1;
   int32 quantity = 2;
+  string sku_code = 3;
+  string sku_name = 4;
+  int64 unit_price_cents = 5;
+  int64 subtotal_cents = 6;
+  bool available = 7;
 }
 
 message CartListResponse {
   repeated CartItem items = 1;
 }
 
+message CartSetRequest {
+  uint64 user_id = 1;
+  uint64 sku_id = 2;
+  int32 quantity = 3;
+}
+
+message CartDeleteRequest {
+  uint64 user_id = 1;
+  uint64 sku_id = 2;
+}
+
+message CartDeleteResponse {
+  bool deleted = 1;
+}
+
+message CartPreviewRequest {
+  uint64 user_id = 1;
+}
+
+message CartPreviewResponse {
+  repeated CartItem items = 1;
+  int64 total_amount_cents = 2;
+  bool available = 3;
+}
+
 service CartService {
+  rpc Set(CartSetRequest) returns (CartItem);
+  rpc Delete(CartDeleteRequest) returns (CartDeleteResponse);
   rpc List(CartListRequest) returns (CartListResponse);
+  rpc Preview(CartPreviewRequest) returns (CartPreviewResponse);
 }

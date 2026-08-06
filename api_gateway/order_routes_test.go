@@ -17,9 +17,9 @@ import (
 	"seckill-mall/catalog_service"
 	"seckill-mall/common/config"
 	"seckill-mall/common/pb"
-	"seckill-mall/common/utils"
 	"seckill-mall/identity_service"
 	"seckill-mall/internal/order"
+	platformauth "seckill-mall/internal/platform/auth"
 	"seckill-mall/inventory_service"
 )
 
@@ -55,7 +55,11 @@ func TestOrderRoutesUseOrderGRPCWithoutGatewayInventoryCall(t *testing.T) {
 		_ = listener.Close()
 	})
 
-	token, err := utils.GenerateToken(9, time.Hour)
+	authManager, err := platformauth.NewManager(config.Conf.JWT.Secret, time.Hour, 24*time.Hour)
+	if err != nil {
+		t.Fatalf("NewManager() error = %v", err)
+	}
+	token, _, err := authManager.IssueAccessToken(9, "customer")
 	if err != nil {
 		t.Fatalf("GenerateToken() error = %v", err)
 	}
@@ -87,7 +91,7 @@ func TestOrderRoutesUseOrderGRPCWithoutGatewayInventoryCall(t *testing.T) {
 		t.Fatalf("duplicate seckill stock = %d, want unchanged", inventoryStore.AvailableStock(1))
 	}
 	seckillID := extractOrderID(t, seckill)
-	otherToken, err := utils.GenerateToken(10, time.Hour)
+	otherToken, _, err := authManager.IssueAccessToken(10, "customer")
 	if err != nil {
 		t.Fatalf("GenerateToken(other) error = %v", err)
 	}

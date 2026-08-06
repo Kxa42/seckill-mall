@@ -24,12 +24,18 @@ import (
 	"seckill-mall/common/config"
 	"seckill-mall/common/contracts"
 	"seckill-mall/common/discovery"
+	"seckill-mall/common/internalcall"
 	"seckill-mall/common/pb"
 	"seckill-mall/internal/order"
 )
 
 func main() {
 	config.InitConfig("order")
+	if strings.EqualFold(config.Conf.Server.Mode, "release") {
+		if err := internalcall.ValidateSecret(os.Getenv("SECKILL_INTERNAL_CALL_SECRET")); err != nil {
+			log.Fatalf("order internal call config invalid: %v", err)
+		}
+	}
 	if err := contracts.ValidateServiceBoundaries(); err != nil {
 		log.Fatalf("service contract validation failed: %v", err)
 	}

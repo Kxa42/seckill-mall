@@ -1,7 +1,7 @@
 # 数据模型
 
 ## 概述
-MySQL `seckill` 库同时承载新商城表和旧秒杀兼容表。新表由 `migrations/001_commerce_mvp.sql` 与 `migrations/002_order_service.sql` 管理；旧表由 `deploy/mysql/init.sql` 初始化。两组表共享实例但保持写入边界。Catalog Repository 只读取目录表，Inventory 的运行时库存状态由 Redis 或内存 Store 管理。
+MySQL `seckill` 库同时承载新商城表和旧秒杀兼容表。新表由 `migrations/001_commerce_mvp.sql`、`migrations/002_order_service.sql` 与 `migrations/003_stage4_services.sql` 管理；旧表由 `deploy/mysql/init.sql` 初始化。两组表共享实例但保持写入边界。Catalog Repository 只读取目录表，Inventory 的运行时库存状态由 Redis 或内存 Store 管理。
 
 ## 新商城表
 
@@ -22,7 +22,7 @@ MySQL `seckill` 库同时承载新商城表和旧秒杀兼容表。新表由 `mi
 | Order | `order_status_history` | 记录每次状态转换、原因、操作方和时间 |
 | Order | `order_create_intents` | `(user_id, idempotency_key)` 唯一，保存创建载荷摘要、确定性订单号、恢复状态和最大重试次数 |
 | Order | `order_operations` | 记录 release/confirm/restock 补偿命令、尝试次数、退避时间和最终失败 |
-| Payment | `payments` | `payment_no`、`order_id`、`callback_ref` 分别唯一 |
+| Payment | `payments` | `payment_no`、`order_id`、`callback_ref` 分别唯一，`user_id` 用于服务端归属校验 |
 | Payment | `refunds` | 每个订单最多一条 Mock 退款，保存退款金额与原因 |
 | Fulfillment | `shipments` | 每订单一条物流，`(carrier, tracking_no)` 唯一 |
 | Messaging | `commerce_outbox_events` | 64 位哈希 `event_id` 唯一，包含事件类型、版本、payload 和重试状态 |
@@ -58,3 +58,4 @@ MySQL `seckill` 库同时承载新商城表和旧秒杀兼容表。新表由 `mi
 - `commerce_outbox_events` 与 `inbox_events` 已建表，但现有 Outbox Worker 只处理旧 `outbox_events`。
 - 目标服务的数据集、同步依赖和事件边界以 `common/contracts/boundaries.go` 为代码契约；共享 MySQL 实例不等于允许跨服务写表。
 - 真实 MySQL migration 重放本轮因 Docker daemon 不可用未执行；SQL 文件、代码测试和 Compose 静态配置已验证，不能将 Memory/Fake 结果等同于真实基础设施验收。
+- 阶段 4 的 Identity、Cart、Payment、Fulfillment 通过独立 Repository 维护各自表；Payment/Fulfillment 只通过 Order gRPC 改订单状态，不直接写 `commerce_orders`。

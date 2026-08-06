@@ -4,12 +4,15 @@
 
 当前项目采用单仓库多服务模式：
 
-- Commerce API：身份、地址、购物车、结算以及支付/物流/退款过渡 API；`order_service` 模式下不再写新订单。
-- API Gateway：HTTP 入口，负责 Catalog 商品查询 gRPC、Order 订单 gRPC、未迁移 `/api/v1` 代理、旧接口 JWT/Sentinel 兼容和请求追踪。
+- Commerce API：迁移期兼容 API；`order_service` 模式下不再写新订单，阶段 4 路由不再由它承载。
+- API Gateway：HTTP 入口，负责 Catalog、Identity、Cart、Order、Payment、Fulfillment gRPC，Commerce NoRoute 回退、旧接口 JWT/Sentinel 兼容和请求追踪。
 - Catalog Service：独立商品目录、SPU/SKU 快照和商品查询 gRPC；支持 MySQL/内存 Repository。
 - Inventory/Seckill Service：独立 reservation 状态机、Redis Lua 秒杀准入/退款恢复和内存 Fake；由 Order Service 唯一编排新订单库存动作。
 - Order Service：新商城普通/秒杀订单唯一编排者，负责快照、状态机、创建意图恢复和补偿重试。
-- Identity Snapshot Service：为 Order 提供地址归属校验和地址快照 gRPC；完整身份写接口仍由 Commerce 过渡承载。
+- Identity Service：独立提供注册、登录、Refresh Token 轮换、地址 CRUD 和地址快照 gRPC。
+- Cart Service：独立拥有购物车，通过 Catalog gRPC 获取实时 SKU 快照并提供结算预览。
+- Payment Service：独立拥有支付/退款单据，提供 Mock 支付、签名回调和 Order 状态协作。
+- Fulfillment Service：独立拥有物流单据，提供管理员发货、用户收货和物流查询。
 - Product Service：旧兼容链路的商品查询、Redis Lua 原子扣库存、限购记录、库存回滚。
 - Legacy Order Service：旧秒杀下单编排、排队订单和旧 Outbox 事件，仅服务旧兼容 API。
 - Outbox Worker：扫描待投递事件，可靠发布 RabbitMQ，并处理重试和最终补偿。
@@ -17,7 +20,7 @@
 - DLQ Consumer：消费死信队列，按订单状态补偿 Redis 库存和用户购买记录，并标记失败订单。
 - Common：公共配置、跨服务边界/事件契约、JWT 工具、链路追踪、protobuf 生成代码。
 
-当前正在执行商城微服务渐进式迁移：第一阶段已建立 `common/contracts` 事件契约和 `proto/commerce` 内部 gRPC 契约；第二阶段已拆分 Catalog 与 Inventory；第三阶段已将 `/api/v1/orders*` 和 `/api/v1/seckill/orders` 切换到唯一 Order Service，Commerce 只作为过渡适配层保留，后续继续拆分 Cart、Payment 和 Fulfillment。
+当前正在执行商城微服务渐进式迁移：第一阶段已建立 `common/contracts` 事件契约和 `proto/commerce` 内部 gRPC 契约；第二阶段已拆分 Catalog 与 Inventory；第三阶段已将订单切换到唯一 Order Service；第四阶段已完成 Identity、Cart、Payment、Fulfillment 的独立进程和 Gateway 显式切流。新商城 RabbitMQ Outbox/Inbox 运行时留待第五阶段，旧秒杀 RabbitMQ 链路继续保留。
 
 商城前端当前明确暂缓，所有新增业务能力通过 `/api/v1` JSON API 和 OpenAPI 契约交付。
 
@@ -29,10 +32,11 @@
 - 新增整数分金额模型、库存预占/确认/释放、幂等下单、待支付超时关闭和订单状态历史。
 - 新增 Mock 支付签名回调、支付幂等、运营发货、用户确认收货和未发货订单退款。
 - 新增统一秒杀订单入口 `POST /api/v1/seckill/orders`，通过 Order Service 一次调用 Inventory `AdmitSeckill`，进入与普通订单一致的待支付和履约状态机。
+- 阶段 4 新增 Identity、Cart、Payment、Fulfillment 独立 gRPC 进程和 Gateway `/api/v1` 路由；Commerce 仅作为迁移期 NoRoute/兼容回退。
 - 新增版本化 SQL migration、完整业务容器、健康检查、优雅停机和 OpenAPI 文档。
 - 新增商城微服务拆分的版本化 gRPC 契约和统一 RabbitMQ 事件信封基线。
-- Catalog/Inventory/Identity Snapshot/Order 已具备独立启动入口、gRPC 边界、可选 etcd 注册或直连配置和 Memory/Fake 验收；Gateway 商品查询和新订单路由已切换到目标服务。
-- Order Service 通过 Catalog/Identity/Inventory gRPC 完成 SKU/地址快照、普通预占、秒杀准入、支付确认、取消、超时和退款库存恢复；Commerce 新模式不再直接写 `commerce_orders`。
+- Catalog/Inventory/Identity/Cart/Order/Payment/Fulfillment 已具备独立启动入口、gRPC 边界、可选 etcd 注册或直连配置和 Memory/Fake 验收；Gateway 商品、身份、购物车、订单、支付和履约路由已切换到目标服务。
+- Order Service 通过 Catalog/Identity/Inventory gRPC 完成 SKU/地址快照、普通预占、秒杀准入、支付确认、取消、超时和退款库存恢复；Payment/Fulfillment 通过 Order gRPC 协作，Commerce 新模式不再直接写 `commerce_orders`。
 - 创建意图和库存操作支持有限退避恢复；RabbitMQ Outbox/Inbox 仍保留在项目中，作为旧链路和后续异步事件阶段能力，并未被移除。
 - 使用 Redis + Lua 原子扣减秒杀库存，避免并发下重复读写导致超卖。
 - 支持用户限购记录，防止同一用户超过配置数量购买。
@@ -63,7 +67,10 @@ cmd/
   commerce-api/              身份/购物车/支付/履约过渡 HTTP API
   catalog-service/           独立 Catalog gRPC 服务
   inventory-service/         独立 Inventory/Seckill gRPC 服务
-  identity-snapshot-service/ Identity 地址快照 gRPC 服务
+  identity-snapshot-service/ Identity 完整身份和地址 gRPC 服务
+  cart-service/              独立 Cart gRPC 服务
+  payment-service/           独立 Payment gRPC 服务
+  fulfillment-service/       独立 Fulfillment gRPC 服务
   order-service/             新商城唯一 Order 编排 gRPC 服务
   migrate/                   版本化数据库迁移命令
 
@@ -101,8 +108,18 @@ inventory_service/
   server.go        Inventory/Seckill gRPC 服务端
 
 identity_service/
-  repository.go    地址快照 Memory/MySQL 只读 Repository
-  server.go        IdentityService 地址快照 gRPC 服务端
+  repository.go    用户、Token、地址 Memory/MySQL Repository
+  server.go        IdentityService 认证、地址和快照 gRPC 服务端
+
+cart_service/
+  model.go/server.go      购物车领域、Repository 和 gRPC 服务端
+  clients.go              Catalog SKU 快照客户端
+
+payment_service/
+  model.go/server.go      支付、回调、退款 Repository 和 gRPC 服务端
+
+fulfillment_service/
+  model.go/server.go      物流、发货、收货 Repository 和 gRPC 服务端
 
 tests/
   order_service_memory_e2e.sh  无 Docker 的 Order/gRPC 验收入口
@@ -162,13 +179,13 @@ Client
   -> API Gateway (Gin + JWT + Sentinel + Prometheus + OpenTelemetry)
   -> Order Service (gRPC)
   -> Catalog Service (SKU 快照)
-  -> Identity Snapshot Service (地址快照)
+  -> Identity Service (地址快照)
   -> Inventory Service (Reserve 或 AdmitSeckill)
   -> OrderDB (commerce_orders/order_items/status_history)
   -> pending_payment
 
 支付成功:
-Commerce Payment Transition
+Gateway -> Payment Service (创建支付/接收回调)
   -> Order.ConfirmPayment
   -> Inventory.Confirm
   -> paid
@@ -179,7 +196,7 @@ Order
   -> canceled
 
 退款:
-Commerce Refund Transition
+Gateway -> Payment Service
   -> Order.Refund
   -> Inventory.Restock (confirmed -> restocked)
   -> refunded
@@ -189,7 +206,7 @@ Commerce Refund Transition
 
 ## 新商城下单流程
 
-1. 用户通过 Gateway 使用 JWT 调用 `POST /api/v1/orders` 或 `POST /api/v1/seckill/orders`。
+1. 用户通过 Gateway 使用商城 JWT 调用 `POST /api/v1/orders` 或 `POST /api/v1/seckill/orders`。
 2. Gateway 校验用户、`Idempotency-Key` 和请求格式，通过 HMAC metadata 调用 Order Service。
 3. Order Service 保存 `(user_id, idempotency_key, request_digest)` 创建意图，生成确定性 Order ID。
 4. Order 调用 Catalog 获取价格/商品快照，调用 Identity 获取地址快照。
@@ -214,7 +231,7 @@ Commerce Refund Transition
 docker compose up -d
 ```
 
-4. `migrate` 容器会先执行 `deploy/mysql/init.sql` 之后的版本化 migration；Catalog、Inventory、Identity Snapshot、Order、Commerce 和 Gateway 会在 migration 成功后启动。
+4. `migrate` 容器会先执行 `deploy/mysql/init.sql` 之后的版本化 migration；Catalog、Inventory、Identity、Cart、Order、Payment、Fulfillment、Commerce 和 Gateway 会在 migration 成功后启动。
 5. 如需直接运行 Go 进程而不使用 Compose，设置必要环境变量：
 
 ```bash
@@ -222,6 +239,7 @@ export SECKILL_JWT_SECRET="replace-with-strong-secret"
 export SECKILL_MYSQL_DSN="root:<local-password>@tcp(127.0.0.1:3306)/seckill?charset=utf8mb4&parseTime=True&loc=UTC"
 export SECKILL_MQ_URL="amqp://<user>:<password>@127.0.0.1:5672/"
 export SECKILL_MOCK_PAYMENT_SECRET="replace-with-another-32-character-secret"
+export SECKILL_PAYMENT_SECRET="replace-with-stage4-payment-secret"
 ```
 
 6. 手动开发模式按顺序启动：
@@ -232,7 +250,10 @@ go run ./cmd/commerce-api
 go run ./cmd/catalog-service
 go run ./cmd/inventory-service
 go run ./cmd/identity-snapshot-service
+go run ./cmd/cart-service
 go run ./cmd/order-service
+go run ./cmd/payment-service
+go run ./cmd/fulfillment-service
 go run ./product_service
 go run ./order_service # Legacy，仅旧 /order
 go run ./outbox_worker
@@ -247,7 +268,15 @@ go run ./api_gateway
 go run ./stress_test
 ```
 
-第三阶段的新服务默认可使用 `config/catalog.yaml`、`config/identity.yaml`、`config/order.yaml` 的内存 Repository 和 `config/inventory.yaml` 的 MemoryStore，不要求本机有 MySQL、Redis 或 Docker；配置各服务 DSN 或将 `SECKILL_INVENTORY_STORE=redis` 后才会连接真实存储。Gateway 的真实服务发现仍需要 etcd，测试可使用 direct address/bufconn。
+阶段 4 服务默认可使用 `config/catalog.yaml`、`config/identity.yaml`、`config/cart.yaml`、`config/order.yaml`、`config/payment.yaml`、`config/fulfillment.yaml` 的内存 Repository 和 `config/inventory.yaml` 的 MemoryStore，不要求本机有 MySQL、Redis、etcd 或 Docker；配置各服务 DSN、将 `SECKILL_INVENTORY_STORE=redis` 或启用服务发现后才会连接真实基础设施。Gateway 的无 Docker 验收可使用 direct address/bufconn。
+
+阶段 4 无 Docker 验收入口：
+
+```bash
+env -u GOTMPDIR tests/stage4_memory_e2e.sh
+```
+
+该脚本覆盖注册、Refresh Token 轮换、地址、购物车、普通订单、支付回调、发货、收货、退款和权限边界。
 
 服务已经拆成多文件 package，启动时必须使用 `go run ./服务目录`。不要再使用 `go run product_service/main.go` 这类单文件命令，否则 Go 只会编译该文件，找不到同目录拆出去的函数和类型。
 
@@ -411,19 +440,19 @@ WHERE id = 1;
 运行全部测试：
 
 ```bash
-go test ./...
+env -u GOTMPDIR go test ./...
 ```
 
 运行指定包并显示子测试：
 
 ```bash
-go test ./outbox_worker -v
+env -u GOTMPDIR go test ./outbox_worker -v
 ```
 
 运行静态检查：
 
 ```bash
-go vet ./...
+env -u GOTMPDIR go vet ./...
 ```
 
 在不依赖 Docker/MySQL 的环境运行进程级商城主链路验收，需要本机提供 `curl` 和 `jq`：
@@ -438,6 +467,12 @@ Order Service 的 Memory/Fake/bufconn 验收：
 bash tests/order_service_memory_e2e.sh
 ```
 
+阶段 4 Identity/Cart/Payment/Fulfillment Memory/Fake/bufconn 验收：
+
+```bash
+env -u GOTMPDIR bash tests/stage4_memory_e2e.sh
+```
+
 当前已有测试：
 
 - `internal/commerce/*_test.go`：覆盖完整交易闭环、取消退款、秒杀统一状态、金额溢出、库存预占保护和 Outbox 事件 ID。
@@ -448,7 +483,11 @@ bash tests/order_service_memory_e2e.sh
 - `catalog_service/server_test.go`：通过 MemoryRepository/bufconn 验证目录分页、详情和参数错误。
 - `inventory_service/server_test.go`：验证预占状态机、重复命令、释放回滚限购、活动隔离和 gRPC Fake E2E。
 - `internal/order/*_test.go`：验证统一普通/秒杀创建、幂等摘要、快照、补偿释放/确认/退款恢复、创建意图恢复、生命周期、权限和 gRPC 错误映射。
-- `identity_service/*_test.go`：验证地址快照归属校验和 Identity gRPC 适配。
+- `identity_service/*_test.go`：验证密码、Token 轮换、地址 CRUD、归属校验和 Identity gRPC 适配。
+- `cart_service/*_test.go`：验证购物车并发设置、用户隔离、SKU 下架、实时价格和金额校验。
+- `payment_service/*_test.go`：验证签名回调、回调流水冲突、支付/退款幂等和远端失败恢复。
+- `fulfillment_service/*_test.go`：验证角色权限、运单冲突、发货/收货幂等和用户隔离。
+- `api_gateway/stage4_routes_test.go`：通过 bufconn 验证阶段 4 Gateway 完整交易链路。
 - `outbox_worker/worker_test.go`：测试 Outbox 订单消息 payload 解析。
 - `outbox_worker/repository_test.go`：测试 Outbox 重试退避时间和最大延迟上限。
 
@@ -467,8 +506,12 @@ bash tests/order_service_memory_e2e.sh
 - `config/gateway.yaml`
 - `config/catalog.yaml`
 - `config/inventory.yaml`
+- `config/identity.yaml`
+- `config/cart.yaml`
 - `config/product.yaml`
 - `config/order.yaml`
+- `config/payment.yaml`
+- `config/fulfillment.yaml`
 - `config/mq.yaml`
 - `config/commerce-services.example.yaml`（目标商城微服务配置基线）
 

@@ -13,8 +13,44 @@ message PaymentCreateResponse {
   string payment_no = 1;
   int64 amount_cents = 2;
   string status = 3;
+  string order_id = 4;
+  uint64 user_id = 5;
+  string provider = 6;
+  string callback_signature = 7;
+  bool reused = 8;
+}
+
+message PaymentCallbackRequest {
+  string payment_no = 1;
+  string callback_ref = 2;
+  string signature = 3;
+}
+
+message PaymentCallbackResponse {
+  PaymentCreateResponse payment = 1;
+  string order_status = 2;
+  bool reused = 3;
+}
+
+message PaymentRefundRequest {
+  uint64 user_id = 1;
+  string order_id = 2;
+  string reason = 3;
+}
+
+message PaymentRefundResponse {
+  string refund_no = 1;
+  string order_id = 2;
+  string payment_no = 3;
+  int64 amount_cents = 4;
+  string reason = 5;
+  string status = 6;
+  string order_status = 7;
+  bool reused = 8;
 }
 
 service PaymentService {
   rpc Create(PaymentCreateRequest) returns (PaymentCreateResponse);
+  rpc Callback(PaymentCallbackRequest) returns (PaymentCallbackResponse);
+  rpc Refund(PaymentRefundRequest) returns (PaymentRefundResponse);
 }

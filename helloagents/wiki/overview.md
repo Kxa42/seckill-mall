@@ -18,14 +18,14 @@
 
 | 模块名称 | 职责 | 状态 | 文档 |
 |---------|------|------|------|
-| Commerce API | 身份/购物车及支付、履约、退款过渡适配层 | 🚧 第 3 阶段过渡 | [commerce](modules/commerce.md) |
-| Identity Snapshot Service | 地址归属校验和订单地址快照 gRPC | 🚧 第 3 阶段适配 | [identity](modules/identity.md) |
-| Catalog Service | 分类、SPU、SKU 快照和商品查询 gRPC | 🚧 第 3 阶段已稳定接入 | [catalog](modules/catalog.md) |
-| Inventory/Seckill Service | reservation 状态机、Redis Lua、秒杀准入和退款恢复 | 🚧 第 3 阶段已拆分 | [inventory](modules/inventory.md) |
-| Cart Service | 购物车和结算预览 | 📝 计划拆分 | [commerce](modules/commerce.md) |
-| Payment Service | 支付回调和退款 | 📝 计划拆分 | [commerce](modules/commerce.md) |
-| Fulfillment Service | 发货、物流和收货 | 📝 计划拆分 | [commerce](modules/commerce.md) |
-| API Gateway | Catalog 查询、过渡代理、旧接口兼容、限流和追踪 | 🚧 迁移中 | [gateway](modules/gateway.md) |
+| Commerce API | 迁移期回退和旧兼容适配层 | 🚧 第 4 阶段回退 | [commerce](modules/commerce.md) |
+| Identity Service | 注册、登录、Token、地址和订单地址快照 gRPC | 🚧 第 4 阶段已拆分 | [identity](modules/identity.md) |
+| Catalog Service | 分类、SPU、SKU 快照和商品查询 gRPC | 🚧 第 4 阶段已接入 | [catalog](modules/catalog.md) |
+| Inventory/Seckill Service | reservation 状态机、Redis Lua、秒杀准入和退款恢复 | 🚧 第 4 阶段已接入 | [inventory](modules/inventory.md) |
+| Cart Service | 购物车和结算预览 | 🚧 第 4 阶段已拆分 | [cart](modules/cart.md) |
+| Payment Service | Mock 支付、签名回调和退款 | 🚧 第 4 阶段已拆分 | [payment](modules/payment.md) |
+| Fulfillment Service | 发货、物流和收货 | 🚧 第 4 阶段已拆分 | [fulfillment](modules/fulfillment.md) |
+| API Gateway | 领域路由、过渡代理、旧接口兼容、限流和追踪 | 🚧 第 4 阶段切流中 | [gateway](modules/gateway.md) |
 | Product Service | 旧秒杀商品读取、Redis 库存和限购 | ✅兼容 | [product](modules/product.md) |
 | Order Service | 新商城普通/秒杀订单唯一编排、状态机和补偿 | 🚧 第 3 阶段已切流 | [order](modules/order.md) |
 | Messaging Workers | 旧链路消息处理和新商城事件契约 | 🚧 迁移中 | [messaging](modules/messaging.md) |
@@ -38,4 +38,5 @@
 - [数据模型](data.md)
 - [OpenAPI 契约](../../api/openapi.yaml)
 - [变更历史](../history/index.md)
+- [阶段 4 归档方案](../history/2026-08/202608061319_stage4_domain_services/)
 - [第三阶段方案包](../history/2026-08/202608061112_order_service_orchestration/)

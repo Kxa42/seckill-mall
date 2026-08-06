@@ -1,0 +1,17 @@
+# Fulfillment Service 的本地配置；未配置 DSN 时使用内存 Repository。
+server:
+  name: "fulfillment-service"
+  mode: "debug"
+  port: "51007"
+
+fulfillment:
+  service_name: "fulfillment-service"
+  address: "127.0.0.1:51007"
+  mysql_dsn: ""
+
+order:
+  service_name: "order-service"
+  address: "127.0.0.1:51005"
+
+etcd:
+  addr: "127.0.0.1:2379"

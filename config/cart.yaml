@@ -1,0 +1,17 @@
+# Cart Service 的本地配置；未配置 DSN 时使用内存 Repository。
+server:
+  name: "cart-service"
+  mode: "debug"
+  port: "51004"
+
+cart:
+  service_name: "cart-service"
+  address: "127.0.0.1:51004"
+  mysql_dsn: ""
+
+catalog:
+  service_name: "catalog-service"
+  address: "127.0.0.1:51002"
+
+etcd:
+  addr: "127.0.0.1:2379"

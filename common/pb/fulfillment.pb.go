@@ -94,6 +94,11 @@ type FulfillmentShipResponse struct {
 	ShipmentId    string                 `protobuf:"bytes,1,opt,name=shipment_id,json=shipmentId,proto3" json:"shipment_id,omitempty"`
 	Status        string                 `protobuf:"bytes,2,opt,name=status,proto3" json:"status,omitempty"`
 	Message       string                 `protobuf:"bytes,3,opt,name=message,proto3" json:"message,omitempty"`
+	OrderId       string                 `protobuf:"bytes,4,opt,name=order_id,json=orderId,proto3" json:"order_id,omitempty"`
+	Carrier       string                 `protobuf:"bytes,5,opt,name=carrier,proto3" json:"carrier,omitempty"`
+	TrackingNo    string                 `protobuf:"bytes,6,opt,name=tracking_no,json=trackingNo,proto3" json:"tracking_no,omitempty"`
+	OrderStatus   string                 `protobuf:"bytes,7,opt,name=order_status,json=orderStatus,proto3" json:"order_status,omitempty"`
+	Reused        bool                   `protobuf:"varint,8,opt,name=reused,proto3" json:"reused,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -149,6 +154,145 @@ func (x *FulfillmentShipResponse) GetMessage() string {
 	return ""
 }
 
+func (x *FulfillmentShipResponse) GetOrderId() string {
+	if x != nil {
+		return x.OrderId
+	}
+	return ""
+}
+
+func (x *FulfillmentShipResponse) GetCarrier() string {
+	if x != nil {
+		return x.Carrier
+	}
+	return ""
+}
+
+func (x *FulfillmentShipResponse) GetTrackingNo() string {
+	if x != nil {
+		return x.TrackingNo
+	}
+	return ""
+}
+
+func (x *FulfillmentShipResponse) GetOrderStatus() string {
+	if x != nil {
+		return x.OrderStatus
+	}
+	return ""
+}
+
+func (x *FulfillmentShipResponse) GetReused() bool {
+	if x != nil {
+		return x.Reused
+	}
+	return false
+}
+
+type FulfillmentConfirmReceiptRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	UserId        uint64                 `protobuf:"varint,1,opt,name=user_id,json=userId,proto3" json:"user_id,omitempty"`
+	OrderId       string                 `protobuf:"bytes,2,opt,name=order_id,json=orderId,proto3" json:"order_id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *FulfillmentConfirmReceiptRequest) Reset() {
+	*x = FulfillmentConfirmReceiptRequest{}
+	mi := &file_proto_commerce_fulfillment_proto_msgTypes[2]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *FulfillmentConfirmReceiptRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*FulfillmentConfirmReceiptRequest) ProtoMessage() {}
+
+func (x *FulfillmentConfirmReceiptRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_commerce_fulfillment_proto_msgTypes[2]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use FulfillmentConfirmReceiptRequest.ProtoReflect.Descriptor instead.
+func (*FulfillmentConfirmReceiptRequest) Descriptor() ([]byte, []int) {
+	return file_proto_commerce_fulfillment_proto_rawDescGZIP(), []int{2}
+}
+
+func (x *FulfillmentConfirmReceiptRequest) GetUserId() uint64 {
+	if x != nil {
+		return x.UserId
+	}
+	return 0
+}
+
+func (x *FulfillmentConfirmReceiptRequest) GetOrderId() string {
+	if x != nil {
+		return x.OrderId
+	}
+	return ""
+}
+
+type FulfillmentGetRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	UserId        uint64                 `protobuf:"varint,1,opt,name=user_id,json=userId,proto3" json:"user_id,omitempty"`
+	OrderId       string                 `protobuf:"bytes,2,opt,name=order_id,json=orderId,proto3" json:"order_id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *FulfillmentGetRequest) Reset() {
+	*x = FulfillmentGetRequest{}
+	mi := &file_proto_commerce_fulfillment_proto_msgTypes[3]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *FulfillmentGetRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*FulfillmentGetRequest) ProtoMessage() {}
+
+func (x *FulfillmentGetRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_commerce_fulfillment_proto_msgTypes[3]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use FulfillmentGetRequest.ProtoReflect.Descriptor instead.
+func (*FulfillmentGetRequest) Descriptor() ([]byte, []int) {
+	return file_proto_commerce_fulfillment_proto_rawDescGZIP(), []int{3}
+}
+
+func (x *FulfillmentGetRequest) GetUserId() uint64 {
+	if x != nil {
+		return x.UserId
+	}
+	return 0
+}
+
+func (x *FulfillmentGetRequest) GetOrderId() string {
+	if x != nil {
+		return x.OrderId
+	}
+	return ""
+}
+
 var File_proto_commerce_fulfillment_proto protoreflect.FileDescriptor
 
 const file_proto_commerce_fulfillment_proto_rawDesc = "" +
@@ -159,14 +303,28 @@ const file_proto_commerce_fulfillment_proto_rawDesc = "" +
 	"\border_id\x18\x02 \x01(\tR\aorderId\x12\x18\n" +
 	"\acarrier\x18\x03 \x01(\tR\acarrier\x12\x1f\n" +
 	"\vtracking_no\x18\x04 \x01(\tR\n" +
-	"trackingNo\"l\n" +
+	"trackingNo\"\xfd\x01\n" +
 	"\x17FulfillmentShipResponse\x12\x1f\n" +
 	"\vshipment_id\x18\x01 \x01(\tR\n" +
 	"shipmentId\x12\x16\n" +
 	"\x06status\x18\x02 \x01(\tR\x06status\x12\x18\n" +
-	"\amessage\x18\x03 \x01(\tR\amessage2\x7f\n" +
+	"\amessage\x18\x03 \x01(\tR\amessage\x12\x19\n" +
+	"\border_id\x18\x04 \x01(\tR\aorderId\x12\x18\n" +
+	"\acarrier\x18\x05 \x01(\tR\acarrier\x12\x1f\n" +
+	"\vtracking_no\x18\x06 \x01(\tR\n" +
+	"trackingNo\x12!\n" +
+	"\forder_status\x18\a \x01(\tR\vorderStatus\x12\x16\n" +
+	"\x06reused\x18\b \x01(\bR\x06reused\"V\n" +
+	" FulfillmentConfirmReceiptRequest\x12\x17\n" +
+	"\auser_id\x18\x01 \x01(\x04R\x06userId\x12\x19\n" +
+	"\border_id\x18\x02 \x01(\tR\aorderId\"K\n" +
+	"\x15FulfillmentGetRequest\x12\x17\n" +
+	"\auser_id\x18\x01 \x01(\x04R\x06userId\x12\x19\n" +
+	"\border_id\x18\x02 \x01(\tR\aorderId2\xe7\x02\n" +
 	"\x12FulfillmentService\x12i\n" +
-	"\x04Ship\x12/.commerce.fulfillment.v1.FulfillmentShipRequest\x1a0.commerce.fulfillment.v1.FulfillmentShipResponseB\x1bZ\x19seckill-mall/common/pb;pbb\x06proto3"
+	"\x04Ship\x12/.commerce.fulfillment.v1.FulfillmentShipRequest\x1a0.commerce.fulfillment.v1.FulfillmentShipResponse\x12}\n" +
+	"\x0eConfirmReceipt\x129.commerce.fulfillment.v1.FulfillmentConfirmReceiptRequest\x1a0.commerce.fulfillment.v1.FulfillmentShipResponse\x12g\n" +
+	"\x03Get\x12..commerce.fulfillment.v1.FulfillmentGetRequest\x1a0.commerce.fulfillment.v1.FulfillmentShipResponseB\x1bZ\x19seckill-mall/common/pb;pbb\x06proto3"
 
 var (
 	file_proto_commerce_fulfillment_proto_rawDescOnce sync.Once
@@ -180,16 +338,22 @@ func file_proto_commerce_fulfillment_proto_rawDescGZIP() []byte {
 	return file_proto_commerce_fulfillment_proto_rawDescData
 }
 
-var file_proto_commerce_fulfillment_proto_msgTypes = make([]protoimpl.MessageInfo, 2)
+var file_proto_commerce_fulfillment_proto_msgTypes = make([]protoimpl.MessageInfo, 4)
 var file_proto_commerce_fulfillment_proto_goTypes = []any{
-	(*FulfillmentShipRequest)(nil),  // 0: commerce.fulfillment.v1.FulfillmentShipRequest
-	(*FulfillmentShipResponse)(nil), // 1: commerce.fulfillment.v1.FulfillmentShipResponse
+	(*FulfillmentShipRequest)(nil),           // 0: commerce.fulfillment.v1.FulfillmentShipRequest
+	(*FulfillmentShipResponse)(nil),          // 1: commerce.fulfillment.v1.FulfillmentShipResponse
+	(*FulfillmentConfirmReceiptRequest)(nil), // 2: commerce.fulfillment.v1.FulfillmentConfirmReceiptRequest
+	(*FulfillmentGetRequest)(nil),            // 3: commerce.fulfillment.v1.FulfillmentGetRequest
 }
 var file_proto_commerce_fulfillment_proto_depIdxs = []int32{
 	0, // 0: commerce.fulfillment.v1.FulfillmentService.Ship:input_type -> commerce.fulfillment.v1.FulfillmentShipRequest
-	1, // 1: commerce.fulfillment.v1.FulfillmentService.Ship:output_type -> commerce.fulfillment.v1.FulfillmentShipResponse
-	1, // [1:2] is the sub-list for method output_type
-	0, // [0:1] is the sub-list for method input_type
+	2, // 1: commerce.fulfillment.v1.FulfillmentService.ConfirmReceipt:input_type -> commerce.fulfillment.v1.FulfillmentConfirmReceiptRequest
+	3, // 2: commerce.fulfillment.v1.FulfillmentService.Get:input_type -> commerce.fulfillment.v1.FulfillmentGetRequest
+	1, // 3: commerce.fulfillment.v1.FulfillmentService.Ship:output_type -> commerce.fulfillment.v1.FulfillmentShipResponse
+	1, // 4: commerce.fulfillment.v1.FulfillmentService.ConfirmReceipt:output_type -> commerce.fulfillment.v1.FulfillmentShipResponse
+	1, // 5: commerce.fulfillment.v1.FulfillmentService.Get:output_type -> commerce.fulfillment.v1.FulfillmentShipResponse
+	3, // [3:6] is the sub-list for method output_type
+	0, // [0:3] is the sub-list for method input_type
 	0, // [0:0] is the sub-list for extension type_name
 	0, // [0:0] is the sub-list for extension extendee
 	0, // [0:0] is the sub-list for field type_name
@@ -206,7 +370,7 @@ func file_proto_commerce_fulfillment_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_proto_commerce_fulfillment_proto_rawDesc), len(file_proto_commerce_fulfillment_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   2,
+			NumMessages:   4,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

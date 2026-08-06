@@ -4,10 +4,13 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os"
+	"time"
 
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 
+	"seckill-mall/common/internalcall"
 	"seckill-mall/common/pb"
 )
 
@@ -61,6 +64,7 @@ func (c *GRPCIdentityClient) GetAddressSnapshot(ctx context.Context, userID, add
 	if c == nil || c.client == nil {
 		return Address{}, NewError(CodeUnavailable, "身份服务客户端未配置", nil)
 	}
+	ctx = internalcall.AppendUser(ctx, os.Getenv("SECKILL_INTERNAL_CALL_SECRET"), pb.IdentityService_GetAddressSnapshot_FullMethodName, userID, time.Now())
 	value, err := c.client.GetAddressSnapshot(ctx, &pb.IdentityAddressSnapshotRequest{UserId: userID, AddressId: addressID})
 	if err != nil {
 		return Address{}, mapDependencyError(err, "身份服务暂时不可用")

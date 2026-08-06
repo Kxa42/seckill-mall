@@ -25,6 +25,10 @@ type grpcClients struct {
 	commerceOrder pb.CommerceOrderServiceClient
 	catalog       pb.CatalogServiceClient
 	inventory     pb.InventoryServiceClient
+	identity      pb.IdentityServiceClient
+	cart          pb.CartServiceClient
+	payment       pb.PaymentServiceClient
+	fulfillment   pb.FulfillmentServiceClient
 }
 
 func initGRPCClients() grpcClients {
@@ -59,6 +63,26 @@ func initGRPCClients() grpcClients {
 		orderServiceName = contracts.ServiceOrder
 	}
 	commerceOrderConn := dialService(orderServiceName, config.Conf.Order.Address, etcdResolver)
+	identityName := config.Conf.Identity.ServiceName
+	if identityName == "" {
+		identityName = contracts.ServiceIdentity
+	}
+	identityConn := dialService(identityName, config.Conf.Identity.Address, etcdResolver)
+	cartName := config.Conf.Cart.ServiceName
+	if cartName == "" {
+		cartName = contracts.ServiceCart
+	}
+	cartConn := dialService(cartName, config.Conf.Cart.Address, etcdResolver)
+	paymentName := config.Conf.Payment.ServiceName
+	if paymentName == "" {
+		paymentName = contracts.ServicePayment
+	}
+	paymentConn := dialService(paymentName, config.Conf.Payment.Address, etcdResolver)
+	fulfillmentName := config.Conf.Fulfillment.ServiceName
+	if fulfillmentName == "" {
+		fulfillmentName = contracts.ServiceFulfillment
+	}
+	fulfillmentConn := dialService(fulfillmentName, config.Conf.Fulfillment.Address, etcdResolver)
 
 	return grpcClients{
 		product:       pb.NewProductServiceClient(productConn),
@@ -66,6 +90,10 @@ func initGRPCClients() grpcClients {
 		commerceOrder: pb.NewCommerceOrderServiceClient(commerceOrderConn),
 		catalog:       pb.NewCatalogServiceClient(catalogConn),
 		inventory:     pb.NewInventoryServiceClient(inventoryConn),
+		identity:      pb.NewIdentityServiceClient(identityConn),
+		cart:          pb.NewCartServiceClient(cartConn),
+		payment:       pb.NewPaymentServiceClient(paymentConn),
+		fulfillment:   pb.NewFulfillmentServiceClient(fulfillmentConn),
 	}
 }
 

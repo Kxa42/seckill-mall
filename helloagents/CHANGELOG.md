@@ -7,6 +7,9 @@
 ## [Unreleased]
 
 ### 新增
+- 新增独立 Identity、Cart、Payment、Fulfillment gRPC 服务、Memory/MySQL Repository、服务入口和阶段 4 Gateway `/api/v1` 路由。
+- 新增阶段 4 内部 HMAC 调用认证、商城 JWT 严格校验、Payment 回调/退款幂等、Fulfillment 发货/收货幂等和 `payments.user_id` migration。
+- 新增 `tests/stage4_memory_e2e.sh`，覆盖注册到收货、退款和权限边界的 Memory/Fake/bufconn 验收。
 - 新增唯一 `Order Service` 独立进程和 Gateway 订单路由，统一普通订单与秒杀订单创建、查询、取消、支付、履约和退款状态转换。
 - 新增 Identity 地址快照适配器、Order 创建意图恢复 worker、`order_operations` 补偿记录和 Inventory `Restock` 退款恢复 RPC。
 - 新增 Order/Inventory 退款恢复、创建意图恢复、系统 `Expire` 签名、幂等与有限重试测试。
@@ -19,6 +22,9 @@
 - 新增 Catalog/Inventory 的 bufconn Fake E2E，覆盖商品查询、库存预占状态机、重复命令、秒杀限购与释放回滚。
 
 ### 变更
+- Gateway 已将身份、地址、购物车、支付、退款、发货、收货和物流路由显式切换到目标领域服务；Commerce 仅保留迁移期 NoRoute/兼容回退。
+- 阶段 4 保持 RabbitMQ：旧秒杀 Outbox/MQ/DLQ 链路继续运行，新商城 Outbox/Inbox 运行时按计划留待阶段 5。
+- Go 用户级 `GOTMPDIR` 设置为 `/tmp`，`GOCACHE` 设置为 `/tmp/go-build-cache`。
 - `commerce-api` 在 `order_service` 模式下关闭订单写入和超时 worker；支付、发货、收货和退款先调用 Order Service，再保存过渡数据。
 - `/api/v1/orders*` 和 `/api/v1/seckill/orders` 已由 Gateway 显式切换到 Order gRPC，旧 `/order` 继续保留旧秒杀/MQ 兼容链路。
 - Inventory 将支付前 `Release` 与退款后的 `Restock` 分离；秒杀退款同时回滚活动限购计数。

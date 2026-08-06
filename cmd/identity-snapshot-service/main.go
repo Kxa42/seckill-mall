@@ -11,6 +11,7 @@ import (
 	"os/signal"
 	"strings"
 	"syscall"
+	"time"
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/health"
@@ -21,12 +22,19 @@ import (
 	"seckill-mall/common/config"
 	"seckill-mall/common/contracts"
 	"seckill-mall/common/discovery"
+	"seckill-mall/common/internalcall"
 	"seckill-mall/common/pb"
 	"seckill-mall/identity_service"
+	platformauth "seckill-mall/internal/platform/auth"
 )
 
 func main() {
 	config.InitConfig("identity")
+	if strings.EqualFold(config.Conf.Server.Mode, "release") {
+		if err := internalcall.ValidateSecret(os.Getenv("SECKILL_INTERNAL_CALL_SECRET")); err != nil {
+			log.Fatalf("identity internal call config invalid: %v", err)
+		}
+	}
 	if _, ok := contracts.ServiceBoundaryFor(contracts.ServiceIdentity); !ok {
 		log.Fatalf("identity service contract is not defined")
 	}
@@ -39,9 +47,23 @@ func main() {
 		log.Fatalf("identity listen failed: %v", err)
 	}
 	repository := buildRepository()
-	server, err := identityservice.NewServer(repository)
+	secret := strings.TrimSpace(config.Conf.JWT.Secret)
+	authManager, err := platformauth.NewManager(secret, 15*time.Minute, 24*time.Hour)
+	if err != nil {
+		log.Fatalf("identity jwt config invalid: %v", err)
+	}
+	server, err := identityservice.NewServer(repository, authManager)
 	if err != nil {
 		log.Fatalf("identity server create failed: %v", err)
+	}
+	if email, password := strings.TrimSpace(os.Getenv("SECKILL_ADMIN_EMAIL")), os.Getenv("SECKILL_ADMIN_PASSWORD"); email != "" || password != "" {
+		hash, hashErr := platformauth.HashPassword(password)
+		if hashErr != nil {
+			log.Fatalf("identity admin password invalid: %v", hashErr)
+		}
+		if adminErr := repository.EnsureAdmin(context.Background(), email, hash, time.Now().UTC()); adminErr != nil {
+			log.Fatalf("identity admin initialization failed: %v", adminErr)
+		}
 	}
 	grpcServer := grpc.NewServer()
 	pb.RegisterIdentityServiceServer(grpcServer, server)

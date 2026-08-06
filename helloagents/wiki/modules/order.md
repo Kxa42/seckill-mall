@@ -5,7 +5,7 @@
 
 ## 模块概述
 - **职责:** 创建意图、SKU/地址快照、Inventory 预占、订单状态机、生命周期权限和有限补偿重试。
-- **状态:** 🚧第 3 阶段已切流
+- **状态:** 🚧第 4 阶段已切流
 - **最后更新:** 2026-08-06
 
 ## 规范
@@ -22,7 +22,7 @@
 
 #### 场景: 创建普通或新秒杀订单
 - `Create` 统一支持普通和秒杀订单；秒杀每个订单只调用一次 `AdmitSeckill`。
-- 通过 Catalog/Identity Snapshot 获取商品和地址快照，Order 不直接读取下游表。
+- 通过 Catalog/Identity 获取商品和地址快照，Order 不直接读取下游表。
 - 使用 `commerce_orders`、订单项、地址快照、状态历史、创建意图和操作记录。
 - 统一支持待支付、取消、超时、支付、发货、收货和退款；退款先调用 Inventory `Restock`。
 
@@ -39,7 +39,7 @@
 
 ## 依赖
 - 旧服务依赖 Product Service、MySQL、etcd、gRPC 和 OpenTelemetry。
-- 新交易模块只依赖 `Repository` 接口和 Catalog/Identity/Inventory gRPC 客户端；Commerce 通过 Order gRPC 调用支付、发货、收货和退款状态转换。
+- 新交易模块只依赖 `Repository` 接口和 Catalog/Identity/Inventory gRPC 客户端；Payment/Fulfillment 通过 Order gRPC 调用支付、发货、收货和退款状态转换。
 
 ## 当前边界
 - 旧订单仍使用三态和浮点兼容字段，不与新商城订单自动互转；新 `/api/v1` 链路不访问旧 `orders`。
@@ -48,3 +48,4 @@
 ## 变更历史
 - [202608051526_backend_commerce_mvp](../../history/2026-08/202608051526_backend_commerce_mvp/) - 新增商城订单 MVP。
 - [202608061112_order_service_orchestration](../../history/2026-08/202608061112_order_service_orchestration/) - Order Service 成为新商城订单唯一编排者。
+- [202608061319_stage4_domain_services](../../history/2026-08/202608061319_stage4_domain_services/) - Payment/Fulfillment 通过 Order gRPC 协作生命周期。
