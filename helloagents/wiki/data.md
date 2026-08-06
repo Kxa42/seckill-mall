@@ -1,7 +1,7 @@
 # 数据模型
 
 ## 概述
-MySQL `seckill` 库同时承载新商城表和旧秒杀兼容表。新表由 `migrations/001_commerce_mvp.sql` 管理；旧表由 `deploy/mysql/init.sql` 初始化。两组表共享实例但保持写入边界。
+MySQL `seckill` 库同时承载新商城表和旧秒杀兼容表。新表由 `migrations/001_commerce_mvp.sql` 管理；旧表由 `deploy/mysql/init.sql` 初始化。两组表共享实例但保持写入边界。第 2 阶段 Catalog Repository 只读取目录表，Inventory 的运行时库存状态由 Redis 或内存 Store 管理。
 
 ## 新商城表
 
@@ -38,6 +38,18 @@ MySQL `seckill` 库同时承载新商城表和旧秒杀兼容表。新表由 `mi
 - `orders`: 排队/成功/失败三态的异步秒杀订单，Go/Protobuf 仍使用兼容 `float32` 金额。
 - `outbox_events`: 旧 Order Service 到 RabbitMQ 的事件表，由现有 Outbox Worker 消费。
 - Redis `product:stock:{product_id}` 与用户购买记录由 Product Service Lua 脚本维护。
+
+## Catalog/Inventory 运行时状态
+
+### Catalog Service
+- `categories`、`spus`、`skus`、`product_images` 是 Catalog 的目录数据集；商品响应中的 SKU 库存字段属于目录快照，不作为秒杀扣减真源。
+- `MemoryRepository` 提供 SKU `1` 的演示商品；配置 `catalog.mysql_dsn` 后使用只读 `MySQLRepository`。
+
+### Inventory/Seckill Service
+- `Reservation` 状态只允许 `reserved -> confirmed/released`，重复确认或释放保持幂等，确认后释放会被拒绝。
+- Redis key 空间默认使用 `inventory:stock:{sku_id}`、`inventory:users:{activity_id}:{sku_id}` 和 `inventory:reservation:{reservation_id}`。
+- 秒杀限购按 `(activity_id, user_id, sku_id)` 隔离；释放 reserved 秒杀预占时，同时恢复库存并回滚活动限购计数。
+- `MemoryStore` 与 Redis Lua 保持同一状态机不变量，后续 Order Service 切换时由它成为秒杀订单的唯一扣减入口。
 
 ## 当前边界
 - `commerce_outbox_events` 与 `inbox_events` 已建表，但现有 Outbox Worker 只处理旧 `outbox_events`。

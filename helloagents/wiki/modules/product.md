@@ -1,12 +1,12 @@
 # Product Service
 
 ## 目的
-保留旧秒杀 Redis Lua 准入，同时由 Commerce Catalog 提供新商城 SPU/SKU 和库存预占模型。
+保留旧 Product Service 的秒杀 Redis Lua 兼容链路；新商城目录与库存已经迁移到独立 Catalog、Inventory/Seckill 服务。
 
 ## 模块概述
-- **职责:** 旧商品查询、Redis 库存、限购与回滚；新商城分类、SPU、SKU 和 reservation。
-- **状态:** ✅兼容
-- **最后更新:** 2026-08-05
+- **职责:** 旧商品查询、Redis 库存、限购与回滚；不再承载新 Catalog/Inventory 的运行时实现。
+- **状态:** ✅兼容（迁移中）
+- **最后更新:** 2026-08-06
 
 ## 规范
 
@@ -17,17 +17,20 @@
 - Redis Lua 在一次原子操作内校验库存和限购。
 - 失败时不产生部分扣减，补偿通过 RollbackStock 恢复。
 
-### 需求: 商城 SKU 库存
-**模块:** Commerce Catalog、Inventory
+### 需求: 旧秒杀 SKU 库存
+**模块:** Legacy Product Service
 
 #### 场景: 用户创建订单
-- 订单事务按 SKU ID 排序加锁并条件扣减可用库存。
-- reservation 在支付、取消、超时和退款时转换状态。
-- admin 更新 SKU 时不能覆盖系统维护的预占库存。
+- 旧 Order Service 继续通过 Product gRPC 使用旧 Redis Lua 扣减和回滚。
+- 旧 `product`、`orders`、`outbox_events` 表仍属于兼容链路，不被新 Catalog/Inventory 访问。
+
+## 迁移边界
+- Catalog Service 只读 `categories`、`spus`、`skus`、`product_images`；商品查询已由 Gateway 切换到 Catalog。
+- Inventory/Seckill Service 负责新 reservation 状态机和秒杀准入；本阶段 `/api/v1/seckill/orders` 尚未切换到它。
 
 ## 依赖
 - 旧服务依赖 MySQL、Redis、etcd、gRPC 和 Prometheus。
-- 新目录与库存位于 Commerce Repository。
+- 新目录与库存不再由本模块实现；Commerce 只保留未迁移交易链路。
 
 ## 当前边界
 - `/api/v1/seckill/orders` 尚未复用旧 Redis Lua 准入，当前使用 MySQL reservation 防超卖。
@@ -35,3 +38,4 @@
 
 ## 变更历史
 - [202608051526_backend_commerce_mvp](../../history/2026-08/202608051526_backend_commerce_mvp/) - 增加 SPU/SKU 和库存 reservation。
+- [202608060842_catalog_inventory_services](../../history/2026-08/202608060842_catalog_inventory_services/) - 建立 Catalog/Inventory 独立服务并划清旧 Product 边界。

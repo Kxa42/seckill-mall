@@ -1,0 +1,17 @@
+server:
+  name: "inventory"
+  mode: "debug"
+  port: "51003"
+  metrics_port: "9103"
+
+inventory:
+  service_name: "inventory"
+  address: "127.0.0.1:51003"
+  store: "memory" # release 环境改为 redis
+  redis_addr: "127.0.0.1:6379"
+  redis_password: ""
+  redis_db: 2
+  purchase_limit: 5
+
+etcd:
+  addr: "127.0.0.1:2379"

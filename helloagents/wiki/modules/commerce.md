@@ -6,7 +6,7 @@
 ## 模块概述
 - **职责:** 用户认证、地址、商品目录、购物车、库存预占、订单、Mock 支付、履约、退款和超时关单。
 - **状态:** 🚧开发中（MVP 已实现，外部集成待补）
-- **最后更新:** 2026-08-05
+- **最后更新:** 2026-08-06
 
 ## 规范
 
@@ -50,6 +50,14 @@
 - `/api/v1/seckill/orders` 与普通订单共用支付、超时、履约和退款状态机。
 - 当前通过 MySQL 条件更新防止超卖；旧 Redis Lua 准入尚未接入该入口。
 
+### 需求: 迁移过渡边界
+**模块:** Commerce API、Gateway、Catalog、Inventory
+
+#### 场景: 未完成服务拆分时保持单一扣减路径
+- 商品列表和详情由 Gateway 调用 Catalog；Commerce API 仍保留直连兼容接口供过渡使用。
+- `/api/v1/seckill/orders` 继续由 Commerce 处理，Gateway 不提前调用 Inventory，避免库存重复扣减。
+- 后续 Order Service 完成订单编排后，才能将秒杀下单切换为 Inventory reservation + 事件驱动链路。
+
 ## API 接口
 - 身份与地址: `/api/v1/auth/*`、`/api/v1/addresses*`。
 - 目录与购物车: `/api/v1/products*`、`/api/v1/cart/*`。
@@ -64,6 +72,7 @@
 
 ## 依赖
 - MySQL；内存 Repository 仅用于开发和验收。
+- Catalog gRPC、Inventory gRPC；Catalog/Inventory 的无 Docker Fake E2E 使用内存实现。
 - Gin、GORM、bcrypt、JWT、Prometheus。
 
 ## 变更历史

@@ -7,13 +7,14 @@
 - **交付:** Docker Compose、版本化 SQL migration、OpenAPI 3.0。
 
 ## 架构与兼容约定
-- 新商城当前仍由 `cmd/commerce-api` 过渡承载，目标拆分为 Identity、Catalog、Inventory/Seckill、Cart、Order、Payment、Fulfillment 多服务；跨服务稳定契约位于 `common/contracts` 和 `proto/commerce`。
+- 新商城当前由 `cmd/commerce-api` 与已拆出的 Catalog、Inventory/Seckill 协同过渡承载，目标继续拆分 Identity、Cart、Order、Payment、Fulfillment；跨服务稳定契约位于 `common/contracts` 和 `proto/commerce`。
 - 旧秒杀服务继续保留兼容接口；其 `product`、`orders`、`outbox_events` 与新商城表相互隔离。
 - 新客户端只使用 `/api/v1`；旧 `/login` 仅在 Gateway `debug` 模式注册。
 - 每个领域只写自己拥有的表；跨领域功能优先使用 API 或版本化事件。
 - `common/` 只能保存稳定的跨服务契约、配置、追踪和工具，不得保存业务 Repository 或跨服务数据库访问。
 - 服务边界与数据所有权以 `common/contracts` 为契约基线；每个业务服务只能写入自己的数据集。
 - 目标商城服务的地址、独立 DSN、RabbitMQ 和 etcd 配置约定见 `config/commerce-services.example.yaml`；模板不包含真实密钥。
+- Catalog/Inventory 可分别通过 `go run ./cmd/catalog-service`、`go run ./cmd/inventory-service` 启动；Gateway 对 Catalog 商品查询设置 2 秒 gRPC deadline，未切换路由继续使用 NoRoute 过渡代理。
 
 ## 开发约定
 - **代码规范:** Go 代码必须通过 `gofmt`、`go test ./...`、`go vet ./...` 和 `git diff --check`。

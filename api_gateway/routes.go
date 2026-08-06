@@ -36,6 +36,7 @@ func registerRoutes(r *gin.Engine, clients grpcClients) {
 
 	productClient := clients.product
 	orderClient := clients.order
+	registerCatalogRoutes(r, clients.catalog)
 
 	// 旧模拟登录仅用于本地兼容调试，release 环境不注册该路由。
 	if config.Conf.Server.Mode == "debug" {

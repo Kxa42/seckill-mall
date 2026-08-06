@@ -3,19 +3,22 @@ package config
 import (
 	"log"
 	"os"
+	"strconv"
 
 	"github.com/spf13/viper"
 )
 
 type Config struct {
-	Server   ServerConfig   `mapstructure:"server"`
-	MySQL    MySQLConfig    `mapstructure:"mysql"`
-	MQ       MQConfig       `mapstructure:"mq"`
-	Redis    RedisConfig    `mapstructure:"redis"`
-	Etcd     EtcdConfig     `mapstructure:"etcd"`
-	Seckill  SeckillConfig  `mapstructure:"seckill"`
-	JWT      JWTConfig      `mapstructure:"jwt"`
-	Commerce CommerceConfig `mapstructure:"commerce"`
+	Server    ServerConfig    `mapstructure:"server"`
+	MySQL     MySQLConfig     `mapstructure:"mysql"`
+	MQ        MQConfig        `mapstructure:"mq"`
+	Redis     RedisConfig     `mapstructure:"redis"`
+	Etcd      EtcdConfig      `mapstructure:"etcd"`
+	Seckill   SeckillConfig   `mapstructure:"seckill"`
+	JWT       JWTConfig       `mapstructure:"jwt"`
+	Commerce  CommerceConfig  `mapstructure:"commerce"`
+	Catalog   CatalogConfig   `mapstructure:"catalog"`
+	Inventory InventoryConfig `mapstructure:"inventory"`
 }
 
 type ServerConfig struct {
@@ -54,6 +57,24 @@ type JWTConfig struct {
 
 type CommerceConfig struct {
 	URL string `mapstructure:"url"`
+}
+
+// CatalogConfig 描述 Catalog 服务自身或 Gateway 的服务发现目标。
+type CatalogConfig struct {
+	ServiceName string `mapstructure:"service_name"`
+	Address     string `mapstructure:"address"`
+	MySQLDSN    string `mapstructure:"mysql_dsn"`
+}
+
+// InventoryConfig 描述 Inventory/Seckill 服务自身或 Gateway 的服务发现目标。
+type InventoryConfig struct {
+	ServiceName   string `mapstructure:"service_name"`
+	Address       string `mapstructure:"address"`
+	Store         string `mapstructure:"store"`
+	RedisAddr     string `mapstructure:"redis_addr"`
+	RedisPassword string `mapstructure:"redis_password"`
+	RedisDB       int    `mapstructure:"redis_db"`
+	PurchaseLimit int32  `mapstructure:"purchase_limit"`
 }
 
 // 全局配置变量
@@ -97,6 +118,40 @@ func applyEnvOverrides() {
 
 	if commerceURL := os.Getenv("SECKILL_COMMERCE_URL"); commerceURL != "" {
 		Conf.Commerce.URL = commerceURL
+	}
+	if serviceName := os.Getenv("SECKILL_CATALOG_SERVICE"); serviceName != "" {
+		Conf.Catalog.ServiceName = serviceName
+	}
+	if serviceAddr := os.Getenv("SECKILL_CATALOG_ADDR"); serviceAddr != "" {
+		Conf.Catalog.Address = serviceAddr
+	}
+	if catalogDSN := os.Getenv("SECKILL_CATALOG_MYSQL_DSN"); catalogDSN != "" {
+		Conf.Catalog.MySQLDSN = catalogDSN
+	}
+	if serviceName := os.Getenv("SECKILL_INVENTORY_SERVICE"); serviceName != "" {
+		Conf.Inventory.ServiceName = serviceName
+	}
+	if serviceAddr := os.Getenv("SECKILL_INVENTORY_ADDR"); serviceAddr != "" {
+		Conf.Inventory.Address = serviceAddr
+	}
+	if store := os.Getenv("SECKILL_INVENTORY_STORE"); store != "" {
+		Conf.Inventory.Store = store
+	}
+	if redisAddr := os.Getenv("SECKILL_INVENTORY_REDIS_ADDR"); redisAddr != "" {
+		Conf.Inventory.RedisAddr = redisAddr
+	}
+	if redisPassword := os.Getenv("SECKILL_INVENTORY_REDIS_PASSWORD"); redisPassword != "" {
+		Conf.Inventory.RedisPassword = redisPassword
+	}
+	if redisDB := os.Getenv("SECKILL_INVENTORY_REDIS_DB"); redisDB != "" {
+		if parsed, err := strconv.Atoi(redisDB); err == nil && parsed >= 0 {
+			Conf.Inventory.RedisDB = parsed
+		}
+	}
+	if purchaseLimit := os.Getenv("SECKILL_INVENTORY_PURCHASE_LIMIT"); purchaseLimit != "" {
+		if parsed, err := strconv.ParseInt(purchaseLimit, 10, 32); err == nil && parsed > 0 {
+			Conf.Inventory.PurchaseLimit = int32(parsed)
+		}
 	}
 	if etcdAddr := os.Getenv("SECKILL_ETCD_ADDR"); etcdAddr != "" {
 		Conf.Etcd.Addr = etcdAddr

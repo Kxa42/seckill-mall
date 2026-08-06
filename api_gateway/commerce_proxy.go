@@ -31,5 +31,6 @@ func registerCommerceProxy(router *gin.Engine) {
 		writer.WriteHeader(http.StatusBadGateway)
 		_, _ = writer.Write([]byte(`{"code":"UPSTREAM_UNAVAILABLE","message":"商城服务暂时不可用"}`))
 	}
-	router.Any("/api/v1/*path", gin.WrapH(proxy))
+	// 使用 NoRoute 作为过渡边界，确保显式注册的 Catalog 路由优先匹配。
+	router.NoRoute(gin.WrapH(proxy))
 }

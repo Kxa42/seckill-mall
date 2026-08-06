@@ -6,7 +6,7 @@
 ## 模块概述
 - **职责:** 环境配置、bcrypt/JWT、请求 ID、统一响应、migration runner、Dockerfile、Compose 和 Prometheus 抓取。
 - **状态:** ✅稳定
-- **最后更新:** 2026-08-05
+- **最后更新:** 2026-08-06
 
 ## 规范
 
@@ -21,12 +21,14 @@
 #### 场景: 无 Docker 的本地验收
 - `SECKILL_COMMERCE_STORE=memory` 不要求 DSN，仅用于临时演示。
 - `tests/e2e_memory.sh` 启动临时二进制并在结束后清理进程。
+- Catalog/Inventory 在 `debug` 或 memory 模式下不连接真实 MySQL/Redis；bufconn Fake E2E 验证 gRPC 契约和状态机。
 
 ## 依赖
 - Go 标准库、Gin、GORM MySQL driver、Docker Compose、Prometheus、OpenTelemetry。
 
 ## 当前边界
 - 当前环境无法拉取 MySQL 镜像，真实 migration 重放和 Compose 健康检查待有 Docker 环境后执行。
+- Catalog/Inventory 的 etcd 注册失败会记录 warning 并继续启动，适合无 etcd 的本地代码验收；生产部署仍需配置健康的 etcd。
 
 ## 变更历史
 - [202608051526_backend_commerce_mvp](../../history/2026-08/202608051526_backend_commerce_mvp/) - 增加商城平台基础与完整编排。

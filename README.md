@@ -5,15 +5,17 @@
 当前项目采用单仓库多服务模式：
 
 - Commerce API：完整商城后端 MVP，提供真实用户认证、地址、商品目录、购物车、统一订单、Mock 支付、履约和退款 API。
-- API Gateway：HTTP 入口，负责 `/api/v1` 代理、旧接口 JWT/Sentinel 兼容和请求追踪。
-- Product Service：商品查询、Redis Lua 原子扣库存、限购记录、库存回滚。
+- API Gateway：HTTP 入口，负责 Catalog 商品查询 gRPC、未迁移 `/api/v1` 代理、旧接口 JWT/Sentinel 兼容和请求追踪。
+- Catalog Service：独立商品目录、SPU/SKU 快照和商品查询 gRPC；支持 MySQL/内存 Repository。
+- Inventory/Seckill Service：独立 reservation 状态机、Redis Lua 秒杀准入和内存 Fake；本阶段尚未接管 HTTP 秒杀订单。
+- Product Service：旧兼容链路的商品查询、Redis Lua 原子扣库存、限购记录、库存回滚。
 - Order Service：下单编排，调用商品服务扣库存，并同事务写入排队中订单和 Outbox 事件。
 - Outbox Worker：扫描待投递事件，可靠发布 RabbitMQ，并处理重试和最终补偿。
 - MQ Consumer：消费订单消息，使用 MySQL 事务推进订单状态并同步扣减 `product.stock`。
 - DLQ Consumer：消费死信队列，按订单状态补偿 Redis 库存和用户购买记录，并标记失败订单。
 - Common：公共配置、跨服务边界/事件契约、JWT 工具、链路追踪、protobuf 生成代码。
 
-当前正在执行商城微服务渐进式迁移：第一阶段已建立 `common/contracts` 事件契约和 `proto/commerce` 内部 gRPC 契约；`commerce-api` 尚未移除，后续将按 Catalog/Inventory、Order、Identity/Cart、Payment/Fulfillment 分阶段切换。
+当前正在执行商城微服务渐进式迁移：第一阶段已建立 `common/contracts` 事件契约和 `proto/commerce` 内部 gRPC 契约；第二阶段已切换 Catalog 查询并建立独立 Inventory/Seckill，`commerce-api` 尚未移除，后续将按 Order、Identity/Cart、Payment/Fulfillment 分阶段切换。
 
 商城前端当前明确暂缓，所有新增业务能力通过 `/api/v1` JSON API 和 OpenAPI 契约交付。
 
@@ -26,8 +28,9 @@
 - 新增 Mock 支付签名回调、支付幂等、运营发货、用户确认收货和未发货订单退款。
 - 新增统一秒杀订单入口 `POST /api/v1/seckill/orders`，进入与普通订单一致的待支付和履约状态机。
 - 新增版本化 SQL migration、完整业务容器、健康检查、优雅停机和 OpenAPI 文档。
-- 新增商城微服务拆分的版本化 gRPC 契约和统一 RabbitMQ 事件信封基线；对应运行时服务将在后续阶段逐步接入。
-- 旧 Product/Order 链路使用 gRPC + etcd；新商城当前已完成版本化 gRPC 契约和服务边界基线，运行时服务发现与调用将在后续拆分阶段接入。
+- 新增商城微服务拆分的版本化 gRPC 契约和统一 RabbitMQ 事件信封基线。
+- Catalog/Inventory 已具备独立启动入口、gRPC 健康检查、可选 etcd 注册、Memory/Fake 验收和生产存储适配；Gateway 商品查询已通过 Catalog 服务发现切换。
+- `/api/v1/seckill/orders` 仍由 Commerce 过渡链路处理，未同时调用新 Inventory，避免双重扣减；完整秒杀订单编排留到 Order Service 阶段。
 - 使用 Redis + Lua 原子扣减秒杀库存，避免并发下重复读写导致超卖。
 - 支持用户限购记录，防止同一用户超过配置数量购买。
 - 对非法购买数量做了多层校验，`count <= 0` 会在 Gateway、Order Service、Product Service 被拒绝。
@@ -55,6 +58,8 @@
 ```text
 cmd/
   commerce-api/    完整商城 HTTP API 与超时关单任务
+  catalog-service/ 独立 Catalog gRPC 服务
+  inventory-service/ 独立 Inventory/Seckill gRPC 服务
   migrate/         版本化数据库迁移命令
 
 internal/
@@ -64,6 +69,7 @@ internal/
 
 common/
   contracts/       跨服务边界、数据所有权、事件信封和事件类型
+  discovery/       etcd endpoint 注册
   pb/              protobuf 生成代码
 
 proto/
@@ -74,6 +80,17 @@ api/
 
 migrations/
   001_commerce_mvp.sql  商城 MVP 数据基线
+
+catalog_service/
+  model.go         Catalog 独立领域模型
+  *_repository.go  Memory/MySQL Repository
+  server.go        Catalog gRPC 服务端
+
+inventory_service/
+  model.go         reservation 和秒杀命令模型
+  memory_store.go  并发安全内存状态机
+  redis_store.go   Redis Lua 状态机
+  server.go        Inventory/Seckill gRPC 服务端
 
 api_gateway/
   main.go          启动装配
@@ -246,6 +263,8 @@ export SECKILL_MOCK_PAYMENT_SECRET="replace-with-another-32-character-secret"
 ```bash
 go run ./cmd/migrate
 go run ./cmd/commerce-api
+go run ./cmd/catalog-service
+go run ./cmd/inventory-service
 go run ./product_service
 go run ./order_service
 go run ./outbox_worker
@@ -259,6 +278,8 @@ go run ./api_gateway
 ```bash
 go run ./stress_test
 ```
+
+第二阶段的新服务默认使用 `config/catalog.yaml` 的内存 Repository 和 `config/inventory.yaml` 的 MemoryStore，不要求本机有 MySQL、Redis 或 Docker；配置 `SECKILL_CATALOG_MYSQL_DSN` 或将 `SECKILL_INVENTORY_STORE=redis` 后才会连接真实存储。Gateway 的真实服务发现仍需要 etcd。
 
 服务已经拆成多文件 package，启动时必须使用 `go run ./服务目录`。不要再使用 `go run product_service/main.go` 这类单文件命令，否则 Go 只会编译该文件，找不到同目录拆出去的函数和类型。
 
@@ -449,6 +470,9 @@ bash tests/e2e_memory.sh
 - `internal/commerce/httpapi/router_test.go`：覆盖 HTTP 主链路、统一响应、请求 ID、认证和 RBAC。
 - `internal/platform/*_test.go`：覆盖 bcrypt/JWT、显式配置、统一响应和 migration SQL 解析。
 - `api_gateway/routes_test.go`：验证 release 模式不暴露旧模拟登录。
+- `api_gateway/catalog_routes_test.go`：通过 Catalog gRPC bufconn 验证商品路由和 JSON 适配。
+- `catalog_service/server_test.go`：通过 MemoryRepository/bufconn 验证目录分页、详情和参数错误。
+- `inventory_service/server_test.go`：验证预占状态机、重复命令、释放回滚限购、活动隔离和 gRPC Fake E2E。
 - `outbox_worker/worker_test.go`：测试 Outbox 订单消息 payload 解析。
 - `outbox_worker/repository_test.go`：测试 Outbox 重试退避时间和最大延迟上限。
 
@@ -465,6 +489,8 @@ bash tests/e2e_memory.sh
 配置文件位于 `config/` 目录，不同服务使用不同配置文件：
 
 - `config/gateway.yaml`
+- `config/catalog.yaml`
+- `config/inventory.yaml`
 - `config/product.yaml`
 - `config/order.yaml`
 - `config/mq.yaml`
@@ -482,6 +508,11 @@ bash tests/e2e_memory.sh
 - `SECKILL_ADMIN_EMAIL` / `SECKILL_ADMIN_PASSWORD`
 - `SECKILL_DLQ_METRICS_PORT`
 - `SECKILL_OUTBOX_METRICS_PORT`
+- `SECKILL_CATALOG_MYSQL_DSN`
+- `SECKILL_CATALOG_SERVICE` / `SECKILL_CATALOG_ADDR`
+- `SECKILL_INVENTORY_STORE` / `SECKILL_INVENTORY_REDIS_ADDR`
+- `SECKILL_INVENTORY_REDIS_PASSWORD` / `SECKILL_INVENTORY_REDIS_DB`
+- `SECKILL_INVENTORY_PURCHASE_LIMIT`
 
 ## 监控与追踪
 
@@ -528,7 +559,8 @@ MQ 异步链路会通过 RabbitMQ headers 传递 OpenTelemetry trace context。O
 - RabbitMQ 生产者侧已启用 publisher confirm、persistent message、mandatory return 和失败重连重试；Consumer 侧已支持连接断开后自动重连。
 - 当前已接入业务侧 MQ/Outbox 指标和 RabbitMQ broker 指标，但还没有内置 Grafana dashboard 与 Prometheus alert 规则。
 - etcd 注册地址可通过 `SECKILL_ADVERTISE_ADDR` 覆盖；Compose 已显式配置容器内服务地址。
-- `/api/v1/seckill/orders` 已接入新交易状态机，但当前使用 MySQL reservation，尚未复用旧 Redis Lua 准入。
+- `/api/v1/products*` 已由 Gateway 切换到 Catalog gRPC；`/api/v1/seckill/orders` 仍使用 Commerce MySQL reservation，尚未切换到新 Inventory/Seckill。
+- 新 Catalog/Inventory 入口已加入代码和配置，但当前 Compose 真实联调仍按环境可用性执行；本环境 Docker daemon 不可用时只执行内存/Fake、静态和竞态验收。
 - 商城前端明确暂缓；真实支付、活动运营 API 和 Commerce Outbox 消费者尚未实现。
 
 ## 继续优化方向
@@ -538,7 +570,7 @@ MQ 异步链路会通过 RabbitMQ headers 传递 OpenTelemetry trace context。O
 1. 增加 Grafana dashboard 和 Prometheus alert：展示 MQ publish、consume、DLQ 补偿、重连、队列积压，并配置失败率和积压告警。
 2. 增强 Outbox 告警和仪表盘：围绕待投递积压、发布失败率、重试次数、最终补偿失败和重连次数配置 Prometheus alert 与 Grafana dashboard。
 3. 修复开发重置能力：让 `/dev/reset` 同步恢复 `product.stock` 到测试初始库存，或改成显式传入重置库存。
-4. 将旧 Redis Lua 秒杀准入适配到 `/api/v1/seckill/orders`，并完成失败回滚与活动时间窗校验。
+4. 进入 Order Service 阶段，将普通/秒杀订单统一编排到 Inventory reservation，完成 HTTP 秒杀切换和失败回滚。
 5. 为 `commerce_outbox_events` 增加发布 Worker 和 Inbox 幂等消费者，逐步替换旧跨表 MQ Consumer。
 6. 在可用 Docker 环境补充 MySQL migration 重放、并发库存、RabbitMQ/Redis 故障和完整 Compose 健康验收。
 7. 增加真实支付沙箱适配、支付结果查询和异步退款；继续保持支付凭证不落库。

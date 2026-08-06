@@ -2,7 +2,7 @@
 // versions:
 // - protoc-gen-go-grpc v1.6.2
 // - protoc             v5.29.3
-// source: proto/commerce/catalog.proto
+// source: catalog.proto
 
 package pb
 
@@ -19,6 +19,8 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
+	CatalogService_ListProducts_FullMethodName   = "/commerce.catalog.v1.CatalogService/ListProducts"
+	CatalogService_GetProduct_FullMethodName     = "/commerce.catalog.v1.CatalogService/GetProduct"
 	CatalogService_GetSKUSnapshot_FullMethodName = "/commerce.catalog.v1.CatalogService/GetSKUSnapshot"
 )
 
@@ -26,6 +28,8 @@ const (
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 type CatalogServiceClient interface {
+	ListProducts(ctx context.Context, in *CatalogListProductsRequest, opts ...grpc.CallOption) (*CatalogListProductsResponse, error)
+	GetProduct(ctx context.Context, in *CatalogGetProductRequest, opts ...grpc.CallOption) (*CatalogProduct, error)
 	GetSKUSnapshot(ctx context.Context, in *CatalogGetSKUSnapshotRequest, opts ...grpc.CallOption) (*CatalogGetSKUSnapshotResponse, error)
 }
 
@@ -35,6 +39,26 @@ type catalogServiceClient struct {
 
 func NewCatalogServiceClient(cc grpc.ClientConnInterface) CatalogServiceClient {
 	return &catalogServiceClient{cc}
+}
+
+func (c *catalogServiceClient) ListProducts(ctx context.Context, in *CatalogListProductsRequest, opts ...grpc.CallOption) (*CatalogListProductsResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(CatalogListProductsResponse)
+	err := c.cc.Invoke(ctx, CatalogService_ListProducts_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *catalogServiceClient) GetProduct(ctx context.Context, in *CatalogGetProductRequest, opts ...grpc.CallOption) (*CatalogProduct, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(CatalogProduct)
+	err := c.cc.Invoke(ctx, CatalogService_GetProduct_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
 }
 
 func (c *catalogServiceClient) GetSKUSnapshot(ctx context.Context, in *CatalogGetSKUSnapshotRequest, opts ...grpc.CallOption) (*CatalogGetSKUSnapshotResponse, error) {
@@ -51,6 +75,8 @@ func (c *catalogServiceClient) GetSKUSnapshot(ctx context.Context, in *CatalogGe
 // All implementations must embed UnimplementedCatalogServiceServer
 // for forward compatibility.
 type CatalogServiceServer interface {
+	ListProducts(context.Context, *CatalogListProductsRequest) (*CatalogListProductsResponse, error)
+	GetProduct(context.Context, *CatalogGetProductRequest) (*CatalogProduct, error)
 	GetSKUSnapshot(context.Context, *CatalogGetSKUSnapshotRequest) (*CatalogGetSKUSnapshotResponse, error)
 	mustEmbedUnimplementedCatalogServiceServer()
 }
@@ -62,6 +88,12 @@ type CatalogServiceServer interface {
 // pointer dereference when methods are called.
 type UnimplementedCatalogServiceServer struct{}
 
+func (UnimplementedCatalogServiceServer) ListProducts(context.Context, *CatalogListProductsRequest) (*CatalogListProductsResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ListProducts not implemented")
+}
+func (UnimplementedCatalogServiceServer) GetProduct(context.Context, *CatalogGetProductRequest) (*CatalogProduct, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetProduct not implemented")
+}
 func (UnimplementedCatalogServiceServer) GetSKUSnapshot(context.Context, *CatalogGetSKUSnapshotRequest) (*CatalogGetSKUSnapshotResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method GetSKUSnapshot not implemented")
 }
@@ -84,6 +116,42 @@ func RegisterCatalogServiceServer(s grpc.ServiceRegistrar, srv CatalogServiceSer
 		t.testEmbeddedByValue()
 	}
 	s.RegisterService(&CatalogService_ServiceDesc, srv)
+}
+
+func _CatalogService_ListProducts_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(CatalogListProductsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(CatalogServiceServer).ListProducts(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: CatalogService_ListProducts_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(CatalogServiceServer).ListProducts(ctx, req.(*CatalogListProductsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _CatalogService_GetProduct_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(CatalogGetProductRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(CatalogServiceServer).GetProduct(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: CatalogService_GetProduct_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(CatalogServiceServer).GetProduct(ctx, req.(*CatalogGetProductRequest))
+	}
+	return interceptor(ctx, in, info, handler)
 }
 
 func _CatalogService_GetSKUSnapshot_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
@@ -112,10 +180,18 @@ var CatalogService_ServiceDesc = grpc.ServiceDesc{
 	HandlerType: (*CatalogServiceServer)(nil),
 	Methods: []grpc.MethodDesc{
 		{
+			MethodName: "ListProducts",
+			Handler:    _CatalogService_ListProducts_Handler,
+		},
+		{
+			MethodName: "GetProduct",
+			Handler:    _CatalogService_GetProduct_Handler,
+		},
+		{
 			MethodName: "GetSKUSnapshot",
 			Handler:    _CatalogService_GetSKUSnapshot_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},
-	Metadata: "proto/commerce/catalog.proto",
+	Metadata: "catalog.proto",
 }

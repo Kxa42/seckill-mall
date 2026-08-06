@@ -24,8 +24,8 @@
 | POST | `/auth/refresh` | Refresh Token | 轮换 Refresh Token |
 | GET/POST | `/addresses` | 用户 | 列表或创建当前用户地址 |
 | PUT/DELETE | `/addresses/:id` | 用户 | 更新或删除自己的地址 |
-| GET | `/products` | 否 | 分页查询在售 SPU/SKU |
-| GET | `/products/:id` | 否 | 查询在售商品详情 |
+| GET | `/products` | 否 | 分页查询在售 SPU/SKU；Gateway 已切换到 Catalog gRPC |
+| GET | `/products/:id` | 否 | 查询在售商品详情；Gateway 已切换到 Catalog gRPC |
 | GET/POST | `/cart/items` | 用户 | 列表或设置购物车商品 |
 | PUT/DELETE | `/cart/items/:sku_id` | 用户 | 修改或删除购物车商品 |
 | GET | `/cart/checkout-preview` | 用户 | 重新计算实时价格与可售库存 |
@@ -62,3 +62,11 @@
 
 ## 旧兼容接口
 `/product/:id`、`/order`、`/order/:order_id` 继续服务原 Redis/MQ 秒杀链路。它们不使用新商城订单表，且不应被新客户端采用。
+
+## 内部 gRPC 契约
+
+| 服务 | 方法 | 当前运行时调用方 | 说明 |
+|------|------|------------------|------|
+| Catalog | `ListProducts` / `GetProduct` / `GetSKUSnapshot` | Gateway、后续 Order | 目录查询和 SKU 快照；默认过滤非 active 数据 |
+| Inventory | `Reserve` / `Confirm` / `Release` | 后续 Order | reservation 状态机，本阶段已独立实现但尚未接管 HTTP 秒杀订单 |
+| Inventory | `AdmitSeckill` | 后续 Order | Redis Lua/Memory 秒杀准入，按活动+用户+SKU 限购 |

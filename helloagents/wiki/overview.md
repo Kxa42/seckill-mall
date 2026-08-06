@@ -20,12 +20,12 @@
 |---------|------|------|------|
 | Commerce API | 迁移期间的商城过渡适配层 | 🚧 迁移中 | [commerce](modules/commerce.md) |
 | Identity Service | 用户、Token 和地址 | 📝 计划拆分 | [commerce](modules/commerce.md) |
-| Catalog Service | 分类、SPU、SKU 和商品快照 | 📝 计划拆分 | [commerce](modules/commerce.md) |
-| Inventory/Seckill Service | 库存预占、Redis Lua 和秒杀准入 | 📝 计划拆分 | [product](modules/product.md) |
+| Catalog Service | 分类、SPU、SKU 快照和商品查询 gRPC | 🚧 第 2 阶段已拆分 | [catalog](modules/catalog.md) |
+| Inventory/Seckill Service | reservation 状态机、Redis Lua 和秒杀准入 | 🚧 第 2 阶段已拆分 | [inventory](modules/inventory.md) |
 | Cart Service | 购物车和结算预览 | 📝 计划拆分 | [commerce](modules/commerce.md) |
 | Payment Service | 支付回调和退款 | 📝 计划拆分 | [commerce](modules/commerce.md) |
 | Fulfillment Service | 发货、物流和收货 | 📝 计划拆分 | [commerce](modules/commerce.md) |
-| API Gateway | `/api/v1` 反向代理、旧接口兼容、限流和追踪 | ✅稳定 | [gateway](modules/gateway.md) |
+| API Gateway | Catalog 查询、过渡代理、旧接口兼容、限流和追踪 | 🚧 迁移中 | [gateway](modules/gateway.md) |
 | Product Service | 旧秒杀商品读取、Redis 库存和限购 | ✅兼容 | [product](modules/product.md) |
 | Order Service | 旧秒杀下单编排、排队订单与 Outbox | ✅兼容 | [order](modules/order.md) |
 | Messaging Workers | 旧链路消息处理和新商城事件契约 | 🚧 迁移中 | [messaging](modules/messaging.md) |
