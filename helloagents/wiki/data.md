@@ -1,0 +1,44 @@
+# 数据模型
+
+## 概述
+MySQL `seckill` 库同时承载新商城表和旧秒杀兼容表。新表由 `migrations/001_commerce_mvp.sql` 管理；旧表由 `deploy/mysql/init.sql` 初始化。两组表共享实例但保持写入边界。
+
+## 新商城表
+
+| 领域 | 表 | 关键约束与用途 |
+|------|----|----------------|
+| Identity | `users` | `email` 唯一，保存 bcrypt 密码哈希、角色和状态 |
+| Identity | `refresh_tokens` | `token_hash` 唯一，只保存 SHA-256 哈希、过期和撤销时间 |
+| Identity | `user_addresses` | 按 `user_id` 查询，订单创建时复制地址快照 |
+| Catalog | `categories` | `slug` 唯一，支持父分类与启用状态 |
+| Catalog | `spus` | 关联分类，维护商品描述和上架状态 |
+| Catalog | `skus` | `code` 唯一，金额为 `price_cents`，库存分为 available/reserved |
+| Catalog | `product_images` | 按 SPU 和顺序保存图片 URL |
+| Inventory | `inventory_reservations` | `(order_id, sku_id)` 唯一，状态为 reserved/confirmed/released/expired |
+| Inventory | `seckill_activities` | 秒杀价格、限购、起止时间和活动状态的预留模型 |
+| Cart | `cart_items` | `(user_id, sku_id)` 唯一，数量必须大于 0 |
+| Order | `commerce_orders` | `order_id` 唯一，`(user_id, idempotency_key)` 唯一，保存地址 JSON 快照 |
+| Order | `order_items` | 保存 SKU 名称、编码、单价、数量和小计快照 |
+| Order | `order_status_history` | 记录每次状态转换、原因、操作方和时间 |
+| Payment | `payments` | `payment_no`、`order_id`、`callback_ref` 分别唯一 |
+| Payment | `refunds` | 每个订单最多一条 Mock 退款，保存退款金额与原因 |
+| Fulfillment | `shipments` | 每订单一条物流，`(carrier, tracking_no)` 唯一 |
+| Messaging | `commerce_outbox_events` | 64 位哈希 `event_id` 唯一，包含事件类型、版本、payload 和重试状态 |
+| Messaging | `inbox_events` | `(consumer, event_id)` 唯一，为后续消费者幂等预留 |
+
+## 关键不变量
+- 新商城所有金额使用 `BIGINT` 整数分，禁止浮点金额参与计算。
+- 创建订单时按 SKU ID 排序加锁，条件扣减 `available_stock` 并增加 `reserved_stock`。
+- 支付成功将 reservation 确认并扣减 reserved；取消/超时释放 reserved；退款恢复 available。
+- 订单状态只允许 `pending_payment -> paid/canceled`、`paid -> shipped/refund_pending`、`shipped -> completed`、`refund_pending -> refunded`。
+- Outbox `event_id` 由事件类型和聚合 ID 的 SHA-256 生成，事务重试保持确定性且不超过 64 字符。
+
+## 旧秒杀兼容数据
+- `product`: 单层商品、定点数据库价格和最终库存。
+- `orders`: 排队/成功/失败三态的异步秒杀订单，Go/Protobuf 仍使用兼容 `float32` 金额。
+- `outbox_events`: 旧 Order Service 到 RabbitMQ 的事件表，由现有 Outbox Worker 消费。
+- Redis `product:stock:{product_id}` 与用户购买记录由 Product Service Lua 脚本维护。
+
+## 当前边界
+- `commerce_outbox_events` 与 `inbox_events` 已建表，但现有 Outbox Worker 只处理旧 `outbox_events`。
+- 真实 MySQL migration 重放本轮因 Docker/数据库环境不可用未执行；SQL 文件、runner 单测和 Compose 配置已验证。

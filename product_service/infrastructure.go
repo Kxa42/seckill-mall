@@ -52,7 +52,7 @@ func preheatStock() {
 
 func RegisterEtcd(port string) {
 	etcdAddr := config.Conf.Etcd.Addr
-	myAddr := "127.0.0.1:" + port
+	myAddr := config.AdvertiseAddr("127.0.0.1:" + port)
 
 	cli, _ := clientv3.New(clientv3.Config{Endpoints: []string{etcdAddr}})
 	em, _ := endpoints.NewManager(cli, SERVICE_NAME)

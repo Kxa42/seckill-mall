@@ -9,7 +9,7 @@ import (
 )
 
 func main() {
-	shutdown := tracer.InitTracer("outbox-worker", "localhost:4318")
+	shutdown := tracer.InitTracer("outbox-worker", tracer.EndpointFromEnv())
 	defer shutdown(context.Background())
 
 	config.InitConfig("mq")

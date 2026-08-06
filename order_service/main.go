@@ -16,7 +16,7 @@ import (
 
 func main() {
 	//初始化链路追踪
-	shutdown := tracer.InitTracer("order-service", "localhost:4318")
+	shutdown := tracer.InitTracer("order-service", tracer.EndpointFromEnv())
 	defer shutdown(context.Background())
 
 	//最先加载配置
@@ -28,7 +28,7 @@ func main() {
 		log.Println("server port not configured, using default port=50052")
 	}
 	//最好使用宿主机真实IP地址，避免容器重启后地址变化导致注册失败
-	myAddr := "127.0.0.1:" + port
+	myAddr := config.AdvertiseAddr("127.0.0.1:" + port)
 
 	initDB()
 	initProductClient()

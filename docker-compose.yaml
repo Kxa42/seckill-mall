@@ -1,5 +1,3 @@
-# version: '3.8'
-
 services:
   mysql:
     image: mysql:8.0
@@ -7,21 +5,38 @@ services:
     ports:
       - "3306:3306"
     environment:
-      MYSQL_ROOT_PASSWORD: "123456"
-      MYSQL_DATABASE: "seckill"
+      MYSQL_ROOT_PASSWORD: "${SECKILL_MYSQL_ROOT_PASSWORD:?SECKILL_MYSQL_ROOT_PASSWORD is required}"
+      MYSQL_DATABASE: seckill
     command:
       - --default-authentication-plugin=mysql_native_password
     volumes:
       - mysql_data:/var/lib/mysql
       - ./deploy/mysql/init.sql:/docker-entrypoint-initdb.d/001-init.sql:ro
-    restart: always
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -uroot -p\"$${MYSQL_ROOT_PASSWORD}\" --silent"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+    restart: unless-stopped
+
+  migrate:
+    build:
+      context: .
+      args:
+        PACKAGE: ./cmd/migrate
+    environment:
+      SECKILL_MYSQL_DSN: "root:${SECKILL_MYSQL_ROOT_PASSWORD:?SECKILL_MYSQL_ROOT_PASSWORD is required}@tcp(mysql:3306)/seckill?charset=utf8mb4&parseTime=True&loc=UTC"
+      SECKILL_MIGRATIONS_DIR: /app/migrations
+    depends_on:
+      mysql:
+        condition: service_healthy
+    restart: "no"
 
   redis:
-    image: redis:latest
+    image: redis:7.4-alpine
     container_name: redis-seckill
     ports:
       - "6379:6379"
-    restart: always
     volumes:
       - redis_data:/data
     command:
@@ -29,59 +44,35 @@ services:
       - --appendonly
       - "yes"
       - --requirepass
-      - "123456"
+      - "${SECKILL_REDIS_PASSWORD:?SECKILL_REDIS_PASSWORD is required}"
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli -a \"$${SECKILL_REDIS_PASSWORD}\" ping | grep PONG"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    environment:
+      SECKILL_REDIS_PASSWORD: "${SECKILL_REDIS_PASSWORD:?SECKILL_REDIS_PASSWORD is required}"
+    restart: unless-stopped
 
   rabbitmq:
-    image: rabbitmq:3-management
-    container_name: rabbitmq
+    image: rabbitmq:3.13-management
+    container_name: seckill-rabbitmq
     ports:
       - "5672:5672"
       - "15672:15672"
       - "15692:15692"
     environment:
-      RABBITMQ_DEFAULT_USER: guest
-      RABBITMQ_DEFAULT_PASS: guest
+      RABBITMQ_DEFAULT_USER: "${SECKILL_RABBITMQ_USER:?SECKILL_RABBITMQ_USER is required}"
+      RABBITMQ_DEFAULT_PASS: "${SECKILL_RABBITMQ_PASSWORD:?SECKILL_RABBITMQ_PASSWORD is required}"
     volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
       - ./deploy/rabbitmq/enabled_plugins:/etc/rabbitmq/enabled_plugins:ro
-    restart: always
-
-  jaeger:
-    image: jaegertracing/all-in-one:latest
-    container_name: jaeger
-    ports:
-      - "16686:16686"
-      #Web UI
-      - "14268:14268"
-      #HTTP收集端口
-      - "4317:4317"
-      #OTLP gRPC
-      - "4318:4318"
-      #OTLP HTTP
-    environment:
-      - COLLECTOR_OTLP_ENABLED=true
-    restart: always
-
-  prometheus:
-    image: prom/prometheus:latest
-    container_name: seckill-prometheus
-    volumes:
-      - ./deploy/prometheus.yml:/etc/prometheus/prometheus.yml
-    ports:
-      - "9090:9090"
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
-    restart: always
-
-  grafana:
-    image: grafana/grafana:latest
-    container_name: seckill-grafana
-    ports:
-      - "3000:3000"
-    depends_on:
-      - prometheus
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
-    restart: always
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+    restart: unless-stopped
 
   etcd:
     image: quay.io/coreos/etcd:v3.5.9
@@ -100,8 +91,247 @@ services:
       - --data-dir=/etcd-data
     volumes:
       - etcd_data:/etcd-data
+    healthcheck:
+      test: ["CMD", "/usr/local/bin/etcdctl", "endpoint", "health"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    restart: unless-stopped
+
+  jaeger:
+    image: jaegertracing/all-in-one:1.62.0
+    container_name: seckill-jaeger
+    ports:
+      - "16686:16686"
+      - "4317:4317"
+      - "4318:4318"
+    environment:
+      COLLECTOR_OTLP_ENABLED: "true"
+    restart: unless-stopped
+
+  commerce-api:
+    build:
+      context: .
+      args:
+        PACKAGE: ./cmd/commerce-api
+    container_name: seckill-commerce-api
+    ports:
+      - "8081:8081"
+    environment:
+      SECKILL_COMMERCE_HTTP_ADDR: :8081
+      SECKILL_COMMERCE_STORE: mysql
+      SECKILL_MYSQL_DSN: "root:${SECKILL_MYSQL_ROOT_PASSWORD:?SECKILL_MYSQL_ROOT_PASSWORD is required}@tcp(mysql:3306)/seckill?charset=utf8mb4&parseTime=True&loc=UTC"
+      SECKILL_JWT_SECRET: "${SECKILL_JWT_SECRET:?SECKILL_JWT_SECRET is required}"
+      SECKILL_MOCK_PAYMENT_SECRET: "${SECKILL_MOCK_PAYMENT_SECRET:?SECKILL_MOCK_PAYMENT_SECRET is required}"
+      SECKILL_ADMIN_EMAIL: "${SECKILL_ADMIN_EMAIL:-}"
+      SECKILL_ADMIN_PASSWORD: "${SECKILL_ADMIN_PASSWORD:-}"
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8081/readyz"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    restart: unless-stopped
+
+  product-service:
+    build:
+      context: .
+      args:
+        PACKAGE: ./product_service
+    container_name: seckill-product-service
+    ports:
+      - "50051:50051"
+      - "9091:9091"
+    environment:
+      SECKILL_MYSQL_DSN: "root:${SECKILL_MYSQL_ROOT_PASSWORD:?SECKILL_MYSQL_ROOT_PASSWORD is required}@tcp(mysql:3306)/seckill?charset=utf8mb4&parseTime=True&loc=UTC"
+      SECKILL_REDIS_ADDR: redis:6379
+      SECKILL_REDIS_PASSWORD: "${SECKILL_REDIS_PASSWORD:?SECKILL_REDIS_PASSWORD is required}"
+      SECKILL_ETCD_ADDR: etcd:2379
+      SECKILL_ADVERTISE_ADDR: product-service:50051
+      SECKILL_OTEL_ENDPOINT: jaeger:4318
+      SECKILL_SERVER_MODE: release
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      etcd:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:9091/metrics"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    restart: unless-stopped
+
+  order-service:
+    build:
+      context: .
+      args:
+        PACKAGE: ./order_service
+    container_name: seckill-order-service
+    ports:
+      - "50052:50052"
+      - "9092:9092"
+    environment:
+      SECKILL_MYSQL_DSN: "root:${SECKILL_MYSQL_ROOT_PASSWORD:?SECKILL_MYSQL_ROOT_PASSWORD is required}@tcp(mysql:3306)/seckill?charset=utf8mb4&parseTime=True&loc=UTC"
+      SECKILL_REDIS_ADDR: redis:6379
+      SECKILL_REDIS_PASSWORD: "${SECKILL_REDIS_PASSWORD:?SECKILL_REDIS_PASSWORD is required}"
+      SECKILL_ETCD_ADDR: etcd:2379
+      SECKILL_ADVERTISE_ADDR: order-service:50052
+      SECKILL_OTEL_ENDPOINT: jaeger:4318
+    depends_on:
+      mysql:
+        condition: service_healthy
+      etcd:
+        condition: service_healthy
+      product-service:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:9092/metrics"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    restart: unless-stopped
+
+  outbox-worker:
+    build:
+      context: .
+      args:
+        PACKAGE: ./outbox_worker
+    container_name: seckill-outbox-worker
+    ports:
+      - "9095:9095"
+    environment:
+      SECKILL_MYSQL_DSN: "root:${SECKILL_MYSQL_ROOT_PASSWORD:?SECKILL_MYSQL_ROOT_PASSWORD is required}@tcp(mysql:3306)/seckill?charset=utf8mb4&parseTime=True&loc=UTC"
+      SECKILL_REDIS_ADDR: redis:6379
+      SECKILL_REDIS_PASSWORD: "${SECKILL_REDIS_PASSWORD:?SECKILL_REDIS_PASSWORD is required}"
+      SECKILL_MQ_URL: "amqp://${SECKILL_RABBITMQ_USER:?SECKILL_RABBITMQ_USER is required}:${SECKILL_RABBITMQ_PASSWORD:?SECKILL_RABBITMQ_PASSWORD is required}@rabbitmq:5672/"
+      SECKILL_OTEL_ENDPOINT: jaeger:4318
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:9095/metrics"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    restart: unless-stopped
+
+  mq-consumer:
+    build:
+      context: .
+      args:
+        PACKAGE: ./mq_consumer
+    container_name: seckill-mq-consumer
+    ports:
+      - "9093:9093"
+    environment:
+      SECKILL_MYSQL_DSN: "root:${SECKILL_MYSQL_ROOT_PASSWORD:?SECKILL_MYSQL_ROOT_PASSWORD is required}@tcp(mysql:3306)/seckill?charset=utf8mb4&parseTime=True&loc=UTC"
+      SECKILL_MQ_URL: "amqp://${SECKILL_RABBITMQ_USER:?SECKILL_RABBITMQ_USER is required}:${SECKILL_RABBITMQ_PASSWORD:?SECKILL_RABBITMQ_PASSWORD is required}@rabbitmq:5672/"
+      SECKILL_OTEL_ENDPOINT: jaeger:4318
+    depends_on:
+      mysql:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:9093/metrics"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    restart: unless-stopped
+
+  dlq-consumer:
+    build:
+      context: .
+      args:
+        PACKAGE: ./dlq_consumer
+    container_name: seckill-dlq-consumer
+    ports:
+      - "9094:9094"
+    environment:
+      SECKILL_MYSQL_DSN: "root:${SECKILL_MYSQL_ROOT_PASSWORD:?SECKILL_MYSQL_ROOT_PASSWORD is required}@tcp(mysql:3306)/seckill?charset=utf8mb4&parseTime=True&loc=UTC"
+      SECKILL_REDIS_ADDR: redis:6379
+      SECKILL_REDIS_PASSWORD: "${SECKILL_REDIS_PASSWORD:?SECKILL_REDIS_PASSWORD is required}"
+      SECKILL_MQ_URL: "amqp://${SECKILL_RABBITMQ_USER:?SECKILL_RABBITMQ_USER is required}:${SECKILL_RABBITMQ_PASSWORD:?SECKILL_RABBITMQ_PASSWORD is required}@rabbitmq:5672/"
+      SECKILL_OTEL_ENDPOINT: jaeger:4318
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:9094/metrics"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    restart: unless-stopped
+
+  api-gateway:
+    build:
+      context: .
+      args:
+        PACKAGE: ./api_gateway
+    container_name: seckill-api-gateway
+    ports:
+      - "8080:8080"
+    environment:
+      SECKILL_JWT_SECRET: "${SECKILL_JWT_SECRET:?SECKILL_JWT_SECRET is required}"
+      SECKILL_ETCD_ADDR: etcd:2379
+      SECKILL_COMMERCE_URL: http://commerce-api:8081
+      SECKILL_OTEL_ENDPOINT: jaeger:4318
+      SECKILL_SERVER_MODE: release
+    depends_on:
+      commerce-api:
+        condition: service_healthy
+      product-service:
+        condition: service_healthy
+      order-service:
+        condition: service_healthy
+      etcd:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8080/healthz"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    restart: unless-stopped
+
+  prometheus:
+    image: prom/prometheus:v2.55.1
+    container_name: seckill-prometheus
+    volumes:
+      - ./deploy/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+    ports:
+      - "9090:9090"
+    depends_on:
+      api-gateway:
+        condition: service_healthy
+    restart: unless-stopped
+
+  grafana:
+    image: grafana/grafana:11.3.0
+    container_name: seckill-grafana
+    ports:
+      - "3000:3000"
+    depends_on:
+      - prometheus
+    volumes:
+      - grafana_data:/var/lib/grafana
+    restart: unless-stopped
 
 volumes:
   mysql_data:
   redis_data:
+  rabbitmq_data:
   etcd_data:
+  grafana_data:

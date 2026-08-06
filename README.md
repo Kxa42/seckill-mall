@@ -4,7 +4,8 @@
 
 当前项目采用单仓库多服务模式：
 
-- API Gateway：HTTP 入口，负责登录、JWT 鉴权、Sentinel 限流和请求转发。
+- Commerce API：完整商城后端 MVP，提供真实用户认证、地址、商品目录、购物车、统一订单、Mock 支付、履约和退款 API。
+- API Gateway：HTTP 入口，负责 `/api/v1` 代理、旧接口 JWT/Sentinel 兼容和请求追踪。
 - Product Service：商品查询、Redis Lua 原子扣库存、限购记录、库存回滚。
 - Order Service：下单编排，调用商品服务扣库存，并同事务写入排队中订单和 Outbox 事件。
 - Outbox Worker：扫描待投递事件，可靠发布 RabbitMQ，并处理重试和最终补偿。
@@ -12,10 +13,17 @@
 - DLQ Consumer：消费死信队列，按订单状态补偿 Redis 库存和用户购买记录，并标记失败订单。
 - Common：公共配置、JWT 工具、链路追踪、protobuf 生成代码。
 
+商城前端当前明确暂缓，所有新增业务能力通过 `/api/v1` JSON API 和 OpenAPI 契约交付。
+
 ## 当前状态
 
 项目当前主链路已经具备：
 
+- 新增 `/api/v1` 商城后端闭环：邮箱注册登录、Refresh Token 轮换、地址归属校验、SPU/SKU、购物车、结算预览和订单查询。
+- 新增整数分金额模型、库存预占/确认/释放、幂等下单、待支付超时关闭和订单状态历史。
+- 新增 Mock 支付签名回调、支付幂等、运营发货、用户确认收货和未发货订单退款。
+- 新增统一秒杀订单入口 `POST /api/v1/seckill/orders`，进入与普通订单一致的待支付和履约状态机。
+- 新增版本化 SQL migration、完整业务容器、健康检查、优雅停机和 OpenAPI 文档。
 - 使用 gRPC + etcd 完成服务发现与服务间调用。
 - 使用 Redis + Lua 原子扣减秒杀库存，避免并发下重复读写导致超卖。
 - 支持用户限购记录，防止同一用户超过配置数量购买。
@@ -37,11 +45,26 @@
 - 接入 OpenTelemetry + Jaeger 做链路追踪。
 - 接入 Prometheus + Grafana 做基础监控。
 - 各服务入口已拆分为按职责组织的多文件结构，`main.go` 只保留启动装配。
-- 已开始补充单元测试，目前覆盖 Outbox payload 解析和重试延迟计算。
+- 已补充商城领域、HTTP、认证、配置、migration、Gateway 安全边界和旧 Outbox 工具测试。
 
 ## 目录结构
 
 ```text
+cmd/
+  commerce-api/    完整商城 HTTP API 与超时关单任务
+  migrate/         版本化数据库迁移命令
+
+internal/
+  commerce/        商城领域、应用服务、MySQL/内存 Repository
+  commerce/httpapi 版本化 HTTP transport
+  platform/        显式配置、认证、统一响应和 migration runner
+
+api/
+  openapi.yaml     `/api/v1` OpenAPI 3.0 契约
+
+migrations/
+  001_commerce_mvp.sql  商城 MVP 数据基线
+
 api_gateway/
   main.go          启动装配
   clients.go       etcd / gRPC client 初始化
@@ -90,7 +113,7 @@ deploy/
   prometheus.yml   Prometheus 抓取配置
 ```
 
-## 整体架构
+## 秒杀链路架构
 
 ```text
 Client
@@ -191,24 +214,28 @@ Redis 重启或数据丢失后，Product Service 会从 MySQL 的 `product.stock
 ## 环境准备
 
 1. 安装 Docker 和 Docker Compose。
-2. 启动 MySQL 和中间件：
+2. 根据 `.env.example` 准备本地 `.env`，所有密码和签名密钥必须替换为本地随机值。
+3. 构建并启动 MySQL、中间件和全部后端服务：
 
 ```bash
 docker compose up -d
 ```
 
-3. 首次启动时，MySQL 会自动执行 `deploy/mysql/init.sql`，创建 `seckill` 库、核心表和一条测试商品。
-4. 设置必要环境变量：
+4. `migrate` 容器会先执行 `deploy/mysql/init.sql` 之后的版本化 migration；`commerce-api`、Product Service、Order Service 和 Gateway 会在 migration 成功后启动。
+5. 如需直接运行 Go 进程而不使用 Compose，设置必要环境变量：
 
 ```bash
 export SECKILL_JWT_SECRET="replace-with-strong-secret"
-export SECKILL_MYSQL_DSN="root:123456@tcp(127.0.0.1:3306)/seckill?charset=utf8mb4&parseTime=True&loc=Local"
-export SECKILL_MQ_URL="amqp://guest:guest@127.0.0.1:5672/"
+export SECKILL_MYSQL_DSN="root:<local-password>@tcp(127.0.0.1:3306)/seckill?charset=utf8mb4&parseTime=True&loc=UTC"
+export SECKILL_MQ_URL="amqp://<user>:<password>@127.0.0.1:5672/"
+export SECKILL_MOCK_PAYMENT_SECRET="replace-with-another-32-character-secret"
 ```
 
-5. 按顺序启动服务：
+6. 手动开发模式按顺序启动：
 
 ```bash
+go run ./cmd/migrate
+go run ./cmd/commerce-api
 go run ./product_service
 go run ./order_service
 go run ./outbox_worker
@@ -217,13 +244,29 @@ go run ./dlq_consumer
 go run ./api_gateway
 ```
 
-6. 可选：运行压测脚本：
+7. 可选：运行压测脚本：
 
 ```bash
 go run ./stress_test
 ```
 
 服务已经拆成多文件 package，启动时必须使用 `go run ./服务目录`。不要再使用 `go run product_service/main.go` 这类单文件命令，否则 Go 只会编译该文件，找不到同目录拆出去的函数和类型。
+
+后端健康检查：
+
+- Gateway：`GET http://127.0.0.1:8080/healthz`
+- Commerce API：`GET http://127.0.0.1:8081/healthz`
+- Commerce readiness：`GET http://127.0.0.1:8081/readyz`
+- OpenAPI：`api/openapi.yaml`
+
+如果当前环境没有可用的 Docker/MySQL，可临时使用内存存储启动 API 进行接口演示。该模式重启后数据会丢失，不能用于生产：
+
+```bash
+export SECKILL_COMMERCE_STORE=memory
+export SECKILL_JWT_SECRET="replace-with-at-least-32-random-characters"
+export SECKILL_MOCK_PAYMENT_SECRET="replace-with-another-32-character-secret"
+go run ./cmd/commerce-api
+```
 
 ## MySQL 初始化
 
@@ -240,6 +283,8 @@ MySQL 容器第一次创建 `mysql_data` volume 时，会自动执行 `deploy/my
 - `outbox_events`：Outbox 可靠投递事件。
 - 测试商品：`id=1`，`stock=100`。
 
+随后 `cmd/migrate` 会执行 `migrations/001_commerce_mvp.sql`，创建新商城 Identity、Catalog、Cart、Order、Payment、Fulfillment、Outbox/Inbox 表。
+
 如果你修改了初始化 SQL，并且想在本地重新执行整套初始化，可以删除 MySQL volume 后重启：
 
 ```bash
@@ -253,7 +298,7 @@ docker compose up -d mysql
 也可以手动执行初始化脚本：
 
 ```bash
-docker exec -i seckill-mysql mysql -uroot -p123456 seckill < deploy/mysql/init.sql
+docker exec -i seckill-mysql mysql -uroot -p"$SECKILL_MYSQL_ROOT_PASSWORD" seckill < deploy/mysql/init.sql
 ```
 
 如果你已有旧版 `orders` 表，需要先补充订单状态查询所需字段：
@@ -297,6 +342,23 @@ ADD COLUMN headers JSON AFTER payload;
 ```
 
 ## 联调验证
+
+完整商城后端 API 统一位于 `/api/v1`，推荐通过 Gateway `http://127.0.0.1:8080/api/v1` 调用。自动化验收覆盖以下流程：
+
+```text
+注册登录
+-> 创建地址
+-> 查询 SPU/SKU
+-> 加入购物车并结算预览
+-> 使用 Idempotency-Key 创建待支付订单
+-> 创建并回调 Mock 支付
+-> admin 发货
+-> 用户确认收货
+```
+
+同时覆盖取消释放库存、支付后退款、重复订单请求、重复支付回调、地址越权和 customer 调用 admin API 被拒绝。接口字段与请求示例以 `api/openapi.yaml` 为准。
+
+以下内容为旧秒杀兼容接口联调：
 
 ### 1. 登录获取 Token
 
@@ -345,7 +407,7 @@ WHERE id = 1;
 
 ## 测试与静态检查
 
-当前项目已开始补充单元测试，优先覆盖不依赖外部组件的核心逻辑。
+项目测试覆盖旧 Outbox 工具逻辑，以及新商城的状态机、金额、认证、库存、幂等、权限和 HTTP 主流程。
 
 运行全部测试：
 
@@ -365,17 +427,28 @@ go test ./outbox_worker -v
 go vet ./...
 ```
 
+在不依赖 Docker/MySQL 的环境运行进程级商城主链路验收，需要本机提供 `curl` 和 `jq`：
+
+```bash
+bash tests/e2e_memory.sh
+```
+
 当前已有测试：
 
+- `internal/commerce/*_test.go`：覆盖完整交易闭环、取消退款、秒杀统一状态、金额溢出、库存预占保护和 Outbox 事件 ID。
+- `internal/commerce/httpapi/router_test.go`：覆盖 HTTP 主链路、统一响应、请求 ID、认证和 RBAC。
+- `internal/platform/*_test.go`：覆盖 bcrypt/JWT、显式配置、统一响应和 migration SQL 解析。
+- `api_gateway/routes_test.go`：验证 release 模式不暴露旧模拟登录。
 - `outbox_worker/worker_test.go`：测试 Outbox 订单消息 payload 解析。
 - `outbox_worker/repository_test.go`：测试 Outbox 重试退避时间和最大延迟上限。
 
-后续建议继续补：
+依赖真实中间件、仍需后续补充的集成测试：
 
 - `product_service/stock.go`：Redis Lua 扣库存、限购和回滚。
 - `mq_consumer/repository.go`：MySQL 事务扣库存和订单幂等落库。
 - `dlq_consumer/compensation.go`：死信补偿分支。
 - `outbox_worker/worker.go`：Outbox 发布失败、重试和最终补偿分支。
+- `internal/commerce/mysql_repository.go`：migration 重放、并发预占、事务回滚和 Outbox/Inbox。
 
 ## 配置说明
 
@@ -391,6 +464,9 @@ go vet ./...
 - `SECKILL_JWT_SECRET`
 - `SECKILL_MYSQL_DSN`
 - `SECKILL_MQ_URL`
+- `SECKILL_REDIS_PASSWORD`
+- `SECKILL_MOCK_PAYMENT_SECRET`
+- `SECKILL_ADMIN_EMAIL` / `SECKILL_ADMIN_PASSWORD`
 - `SECKILL_DLQ_METRICS_PORT`
 - `SECKILL_OUTBOX_METRICS_PORT`
 
@@ -433,11 +509,14 @@ MQ 异步链路会通过 RabbitMQ headers 传递 OpenTelemetry trace context。O
 - Order Service 会写入排队中订单，已有旧表需要先执行 `orders` 表字段升级 SQL，否则会因为缺少 `count`、`fail_reason` 或 `updated_at` 导致写入失败。
 - 服务已拆成多文件 package，本地启动请使用 `go run ./api_gateway`、`go run ./product_service` 这种目录形式。
 - Outbox Worker 已完全接管 MQ 投递，Order Service 不再直接依赖 RabbitMQ；启动服务时需要确保 `outbox_worker` 正常运行，否则订单会停留在 `status = 0` 排队中。
+- 上述 Worker 当前只处理旧 `outbox_events`；新商城 `commerce_outbox_events` 已持久化但尚未接入发布器。
 - Product Service 在 `debug` 模式下会启用 `/dev/reset`，该接口会清空 Redis 和 `orders` 表，但当前不会自动恢复 `product.stock` 到初始值。
 - DLQ Consumer 已支持常见落库失败后的 Redis 补偿，但对用户购买记录小于回滚数量等异常状态仍需要人工核查日志。
 - RabbitMQ 生产者侧已启用 publisher confirm、persistent message、mandatory return 和失败重连重试；Consumer 侧已支持连接断开后自动重连。
 - 当前已接入业务侧 MQ/Outbox 指标和 RabbitMQ broker 指标，但还没有内置 Grafana dashboard 与 Prometheus alert 规则。
-- etcd 注册地址当前偏本地开发场景，服务地址仍以 `127.0.0.1` 为主，多机或容器化部署需要调整。
+- etcd 注册地址可通过 `SECKILL_ADVERTISE_ADDR` 覆盖；Compose 已显式配置容器内服务地址。
+- `/api/v1/seckill/orders` 已接入新交易状态机，但当前使用 MySQL reservation，尚未复用旧 Redis Lua 准入。
+- 商城前端明确暂缓；真实支付、活动运营 API 和 Commerce Outbox 消费者尚未实现。
 
 ## 继续优化方向
 
@@ -446,10 +525,10 @@ MQ 异步链路会通过 RabbitMQ headers 传递 OpenTelemetry trace context。O
 1. 增加 Grafana dashboard 和 Prometheus alert：展示 MQ publish、consume、DLQ 补偿、重连、队列积压，并配置失败率和积压告警。
 2. 增强 Outbox 告警和仪表盘：围绕待投递积压、发布失败率、重试次数、最终补偿失败和重连次数配置 Prometheus alert 与 Grafana dashboard。
 3. 修复开发重置能力：让 `/dev/reset` 同步恢复 `product.stock` 到测试初始库存，或改成显式传入重置库存。
-4. 扩展订单状态机：增加已取消、超时关闭、人工核查等状态，并记录状态流转历史。
-5. 改善服务注册：etcd 注册地址改为可配置，支持 Docker、WSL、多机部署场景。
-6. 扩展自动化测试：补充 Redis Lua、库存回滚、Consumer 幂等、MySQL 事务扣库存、DLQ 补偿、MQ 发布确认、消费端重连和 MQ trace propagation 等核心测试。
-7. 增加数据库迁移并完善安全边界：当前已有 `deploy/mysql/init.sql`，后续可引入 migration 工具，关闭生产环境 `/dev/reset`，JWT secret 强度校验，敏感日志脱敏。
+4. 将旧 Redis Lua 秒杀准入适配到 `/api/v1/seckill/orders`，并完成失败回滚与活动时间窗校验。
+5. 为 `commerce_outbox_events` 增加发布 Worker 和 Inbox 幂等消费者，逐步替换旧跨表 MQ Consumer。
+6. 在可用 Docker 环境补充 MySQL migration 重放、并发库存、RabbitMQ/Redis 故障和完整 Compose 健康验收。
+7. 增加真实支付沙箱适配、支付结果查询和异步退款；继续保持支付凭证不落库。
 
 ## 技术栈
 

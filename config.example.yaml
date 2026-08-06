@@ -11,7 +11,7 @@ mq:
 
 redis:
   addr: "localhost:6379"
-  password: "password"
+  password: "" # 通过环境变量 SECKILL_REDIS_PASSWORD 注入
   db: 0
 
 etcd:
@@ -23,3 +23,6 @@ seckill:
 jwt:
   expire: "24h"
   secret: "" # 通过环境变量 SECKILL_JWT_SECRET 注入
+
+commerce:
+  url: "http://127.0.0.1:8081"

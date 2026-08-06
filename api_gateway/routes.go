@@ -29,42 +29,49 @@ func setupRouter(clients grpcClients) *gin.Engine {
 }
 
 func registerRoutes(r *gin.Engine, clients grpcClients) {
+	registerCommerceProxy(r)
+	r.GET("/healthz", func(c *gin.Context) {
+		c.JSON(200, gin.H{"status": "ok"})
+	})
+
 	productClient := clients.product
 	orderClient := clients.order
 
-	//模拟登录接口
-	r.POST("/login", func(c *gin.Context) {
-		type LoginReq struct {
-			UserID int64 `json:"user_id"`
-		}
-		var req LoginReq
-		if err := c.ShouldBind(&req); err != nil {
-			c.JSON(400, gin.H{"error": "参数错误"})
-			return
-		}
-		expireStr := config.Conf.JWT.Expire
+	// 旧模拟登录仅用于本地兼容调试，release 环境不注册该路由。
+	if config.Conf.Server.Mode == "debug" {
+		r.POST("/login", func(c *gin.Context) {
+			type LoginReq struct {
+				UserID int64 `json:"user_id"`
+			}
+			var req LoginReq
+			if err := c.ShouldBind(&req); err != nil {
+				c.JSON(400, gin.H{"error": "参数错误"})
+				return
+			}
+			expireStr := config.Conf.JWT.Expire
 
-		//解析时间字符串
-		expireDuration, err := time.ParseDuration(expireStr)
-		if err != nil {
-			expireDuration = 2 * time.Hour
-		}
+			//解析时间字符串
+			expireDuration, err := time.ParseDuration(expireStr)
+			if err != nil {
+				expireDuration = 2 * time.Hour
+			}
 
-		// 生成Token
-		token, err := utils.GenerateToken(req.UserID, expireDuration)
+			// 生成Token
+			token, err := utils.GenerateToken(req.UserID, expireDuration)
 
-		if err != nil {
-			c.JSON(500, gin.H{"error": "生成Token失败"})
-			return
-		}
+			if err != nil {
+				c.JSON(500, gin.H{"error": "生成Token失败"})
+				return
+			}
 
-		c.JSON(200, gin.H{
-			"code":    200,
-			"message": "登录成功",
-			"token":   token,
-			"expire":  expireStr,
+			c.JSON(200, gin.H{
+				"code":    200,
+				"message": "登录成功",
+				"token":   token,
+				"expire":  expireStr,
+			})
 		})
-	})
+	}
 
 	// 接口: 查询商品
 	r.GET("/product/:id", func(c *gin.Context) {

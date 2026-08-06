@@ -10,7 +10,7 @@ import (
 )
 
 func main() {
-	shutdown := tracer.InitTracer("dlq-consumer", "localhost:4318")
+	shutdown := tracer.InitTracer("dlq-consumer", tracer.EndpointFromEnv())
 	defer shutdown(context.Background())
 
 	config.InitConfig("mq")

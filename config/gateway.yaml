@@ -10,3 +10,6 @@ etcd:
 jwt:
   expire: "24h"
   secret: "" # 推荐通过环境变量 SECKILL_JWT_SECRET 注入
+
+commerce:
+  url: "http://127.0.0.1:8081"

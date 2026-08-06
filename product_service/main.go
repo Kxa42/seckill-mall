@@ -16,7 +16,7 @@ import (
 )
 
 func main() {
-	shutdown := tracer.InitTracer("product-service", "localhost:4318")
+	shutdown := tracer.InitTracer("product-service", tracer.EndpointFromEnv())
 	defer shutdown(context.Background())
 	config.InitConfig("product")
 	// 统一端口键：server.port

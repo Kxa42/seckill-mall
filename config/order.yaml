@@ -12,7 +12,7 @@ mq:
 
 redis:
   addr: "localhost:6379"
-  password: "123456"
+  password: "" # 推荐通过环境变量 SECKILL_REDIS_PASSWORD 注入
   db: 1
 
 etcd:

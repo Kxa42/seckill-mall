@@ -12,7 +12,7 @@ func main() {
 	config.InitConfig("gateway")
 
 	//初始化链路追踪
-	shutdown := tracer.InitTracer("api-gateway", "localhost:4318")
+	shutdown := tracer.InitTracer("api-gateway", tracer.EndpointFromEnv())
 	defer shutdown(context.Background())
 
 	// 初始化 Sentinel
