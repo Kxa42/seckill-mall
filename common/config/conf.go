@@ -21,6 +21,8 @@ type Config struct {
 	Commerce  CommerceConfig  `mapstructure:"commerce"`
 	Catalog   CatalogConfig   `mapstructure:"catalog"`
 	Inventory InventoryConfig `mapstructure:"inventory"`
+	Identity  IdentityConfig  `mapstructure:"identity"`
+	Order     OrderConfig     `mapstructure:"order"`
 }
 
 type ServerConfig struct {
@@ -79,6 +81,20 @@ type InventoryConfig struct {
 	PurchaseLimit int32  `mapstructure:"purchase_limit"`
 }
 
+// IdentityConfig 描述 Identity 地址快照服务自身或下游发现目标。
+type IdentityConfig struct {
+	ServiceName string `mapstructure:"service_name"`
+	Address     string `mapstructure:"address"`
+	MySQLDSN    string `mapstructure:"mysql_dsn"`
+}
+
+// OrderConfig 描述目标商城 Order Service 自身或 Gateway 发现目标。
+type OrderConfig struct {
+	ServiceName string `mapstructure:"service_name"`
+	Address     string `mapstructure:"address"`
+	MySQLDSN    string `mapstructure:"mysql_dsn"`
+}
+
 // 全局配置变量
 var Conf *Config
 
@@ -120,6 +136,19 @@ func InitConfig(filename string) {
 func applyEnvOverrides() {
 	if dsn := os.Getenv("SECKILL_MYSQL_DSN"); dsn != "" {
 		Conf.MySQL.DSN = dsn
+		// 兼容独立服务旧 YAML：新按服务字段优先，未提供时沿用角色进程自己的 DSN。
+		if Conf.Order.MySQLDSN == "" {
+			Conf.Order.MySQLDSN = dsn
+		}
+		if Conf.Identity.MySQLDSN == "" {
+			Conf.Identity.MySQLDSN = dsn
+		}
+	}
+	if dsn := os.Getenv("SECKILL_ORDER_MYSQL_DSN"); dsn != "" {
+		Conf.Order.MySQLDSN = dsn
+	}
+	if dsn := os.Getenv("SECKILL_IDENTITY_MYSQL_DSN"); dsn != "" {
+		Conf.Identity.MySQLDSN = dsn
 	}
 
 	if secret := os.Getenv("SECKILL_JWT_SECRET"); secret != "" {
@@ -147,6 +176,18 @@ func applyEnvOverrides() {
 	}
 	if serviceAddr := os.Getenv("SECKILL_INVENTORY_ADDR"); serviceAddr != "" {
 		Conf.Inventory.Address = serviceAddr
+	}
+	if serviceName := os.Getenv("SECKILL_IDENTITY_SERVICE"); serviceName != "" {
+		Conf.Identity.ServiceName = serviceName
+	}
+	if serviceAddr := os.Getenv("SECKILL_IDENTITY_ADDR"); serviceAddr != "" {
+		Conf.Identity.Address = serviceAddr
+	}
+	if serviceName := os.Getenv("SECKILL_ORDER_SERVICE"); serviceName != "" {
+		Conf.Order.ServiceName = serviceName
+	}
+	if serviceAddr := os.Getenv("SECKILL_ORDER_ADDR"); serviceAddr != "" {
+		Conf.Order.Address = serviceAddr
 	}
 	if store := os.Getenv("SECKILL_INVENTORY_STORE"); store != "" {
 		Conf.Inventory.Store = store
@@ -178,6 +219,12 @@ func applyEnvOverrides() {
 	}
 	if serverMode := os.Getenv("SECKILL_SERVER_MODE"); serverMode != "" {
 		Conf.Server.Mode = serverMode
+	}
+	if serverPort := os.Getenv("SECKILL_SERVER_PORT"); serverPort != "" {
+		Conf.Server.Port = serverPort
+	}
+	if metricsPort := os.Getenv("SECKILL_SERVER_METRICS_PORT"); metricsPort != "" {
+		Conf.Server.MetricsPort = metricsPort
 	}
 }
 

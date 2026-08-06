@@ -21,3 +21,7 @@ catalog:
 inventory:
   service_name: "inventory-service"
   address: "" # 第二阶段仅建立客户端，秒杀订单仍由兼容代理处理
+
+order:
+  service_name: "order-service"
+  address: "127.0.0.1:51005"

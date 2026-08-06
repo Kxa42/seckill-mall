@@ -7,6 +7,9 @@
 ## [Unreleased]
 
 ### 新增
+- 新增唯一 `Order Service` 独立进程和 Gateway 订单路由，统一普通订单与秒杀订单创建、查询、取消、支付、履约和退款状态转换。
+- 新增 Identity 地址快照适配器、Order 创建意图恢复 worker、`order_operations` 补偿记录和 Inventory `Restock` 退款恢复 RPC。
+- 新增 Order/Inventory 退款恢复、创建意图恢复、系统 `Expire` 签名、幂等与有限重试测试。
 - 补齐事件契约的未来版本测试和版本语义说明；Catalog、Inventory 启动时实际校验共享服务边界。
 - 新增 `SECKILL_SERVICES_CONFIG` 按角色配置加载器，支持严格环境变量展开、Gateway/Catalog/Inventory 映射和旧配置回退。
 - 建立商城微服务渐进式迁移方案，新增 Catalog、Inventory/Seckill、Identity、Cart、Order、Payment、Fulfillment 的版本化 gRPC 契约。
@@ -16,12 +19,20 @@
 - 新增 Catalog/Inventory 的 bufconn Fake E2E，覆盖商品查询、库存预占状态机、重复命令、秒杀限购与释放回滚。
 
 ### 变更
+- `commerce-api` 在 `order_service` 模式下关闭订单写入和超时 worker；支付、发货、收货和退款先调用 Order Service，再保存过渡数据。
+- `/api/v1/orders*` 和 `/api/v1/seckill/orders` 已由 Gateway 显式切换到 Order gRPC，旧 `/order` 继续保留旧秒杀/MQ 兼容链路。
+- Inventory 将支付前 `Release` 与退款后的 `Restock` 分离；秒杀退款同时回滚活动限购计数。
+- 本轮通过 Memory/Fake/bufconn、全仓测试、vet、全仓 race 和 Compose 静态校验；Docker daemon 不可用，真实基础设施联调跳过。
+- 修复不同 `Idempotency-Key` 相同请求摘要复用订单号的问题；稳定订单号和创建意图 ID 现在同时绑定用户、幂等键和请求摘要。
+- 修复库存释放补偿成功后订单仍停留在 `pending_payment` 的问题，补偿 worker 会在全部 reservation 释放后完成取消。
+- 修复订单事务成功但创建意图尚未标记完成时的重复恢复扫描，幂等命中已有订单会收口对应意图。
+
 - 统一 Catalog/Inventory 的服务发现键为 `catalog-service`、`inventory-service`，避免配置名与共享契约不一致。
 - 明确 `EventType` 与 `EventVersion` 独立演进，未知正数未来版本由消费者能力检查处理。
 - 知识库明确新商城目标为统一微服务架构，当前仍处于契约基线阶段，未宣称服务拆分已完成。
 - 统一订单取消事件名称为 `order.cancelled.v1`，保留旧拼写的代码别名但不增加新的事件类型。
 - Gateway 的 `/api/v1/products`、`/api/v1/products/:id` 已切换到 Catalog gRPC；其他 `/api/v1` 路由通过 NoRoute 保留 Commerce 过渡代理。
-- `/api/v1/seckill/orders` 暂不切换到新 Inventory，避免旧 Commerce 和新库存服务双重扣减。
+- `/api/v1/seckill/orders` 已切换到 Order gRPC 并只调用一次 Inventory；旧 `/order` 保留旧 Commerce/Product/Redis/MQ 兼容链路。
 
 ## [0.1.0] - 2026-08-05
 

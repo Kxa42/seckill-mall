@@ -18,5 +18,6 @@ type Store interface {
 	Reserve(ctx context.Context, command ReserveCommand) (Reservation, error)
 	Confirm(ctx context.Context, reservationID, orderID string) (Reservation, error)
 	Release(ctx context.Context, reservationID, orderID string) (Reservation, error)
+	Restock(ctx context.Context, reservationID, orderID string) (Reservation, error)
 	AdmitSeckill(ctx context.Context, command SeckillAdmissionCommand) (Reservation, error)
 }

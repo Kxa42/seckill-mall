@@ -36,6 +36,24 @@ func main() {
 	if err != nil {
 		log.Fatalf("创建商城服务: %v", err)
 	}
+	closeOrderClient := func() {}
+	var orderClient commerce.OrderLifecycleClient
+	if cfg.OrderWriteMode == commerce.OrderWriteModeOrderService {
+		connection, client, dialErr := commerce.DialOrderLifecycle(cfg.OrderServiceAddr, cfg.InternalCallSecret)
+		if dialErr != nil {
+			log.Fatalf("连接 Order Service: %v", dialErr)
+		}
+		orderClient = client
+		closeOrderClient = func() {
+			if closeErr := connection.Close(); closeErr != nil {
+				log.Printf("关闭 Order Service 连接失败: %v", closeErr)
+			}
+		}
+	}
+	defer closeOrderClient()
+	if err := service.ConfigureOrderMigration(cfg.OrderWriteMode, orderClient); err != nil {
+		log.Fatalf("配置订单迁移模式: %v", err)
+	}
 	if err := service.EnsureAdmin(context.Background(), cfg.AdminEmail, cfg.AdminPassword); err != nil {
 		log.Fatalf("初始化管理员: %v", err)
 	}
@@ -59,7 +77,11 @@ func main() {
 	}
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
-	go runExpiryWorker(ctx, service)
+	if service.LegacyOrderWritesEnabled() {
+		go runExpiryWorker(ctx, service)
+	} else {
+		log.Println("commerce-api 订单写入与超时关单任务已关闭，由 Order Service 接管")
+	}
 	go func() {
 		log.Printf("commerce-api 已启动 addr=%s", cfg.HTTPAddr)
 		if err := server.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {

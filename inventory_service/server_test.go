@@ -41,6 +41,14 @@ func TestMemoryStoreReservationStateMachine(t *testing.T) {
 	if _, err := store.Release(context.Background(), first.ReservationID, first.OrderID); err != ErrConflict {
 		t.Fatalf("Release(confirmed) error = %v, want %v", err, ErrConflict)
 	}
+	restocked, err := store.Restock(context.Background(), first.ReservationID, first.OrderID)
+	if err != nil || restocked.Status != ReservationRestocked {
+		t.Fatalf("Restock() reservation=%+v error=%v", restocked, err)
+	}
+	repeatedRestock, err := store.Restock(context.Background(), first.ReservationID, first.OrderID)
+	if err != nil || repeatedRestock.Status != ReservationRestocked {
+		t.Fatalf("Restock(repeated) reservation=%+v error=%v", repeatedRestock, err)
+	}
 
 	second, err := store.Reserve(context.Background(), ReserveCommand{ReservationID: "reserve-3", OrderID: "order-3", UserID: 11, SKUID: 7, Quantity: 1})
 	if err != nil {
@@ -52,8 +60,28 @@ func TestMemoryStoreReservationStateMachine(t *testing.T) {
 	if _, err := store.Release(context.Background(), second.ReservationID, second.OrderID); err != nil {
 		t.Fatalf("Release(repeated) error = %v", err)
 	}
-	if available := store.AvailableStock(7); available != 1 {
-		t.Fatalf("available stock after confirm/release = %d, want 1", available)
+	if available := store.AvailableStock(7); available != 2 {
+		t.Fatalf("available stock after confirm/restock/release = %d, want 2", available)
+	}
+}
+
+func TestMemoryStoreRestockRollsBackSeckillPurchaseLimit(t *testing.T) {
+	store := NewMemoryStore(map[uint64]int32{13: 1}, 1)
+	reservation, err := store.AdmitSeckill(context.Background(), SeckillAdmissionCommand{RequestID: "refund-request", OrderID: "refund-order", ActivityID: 100, UserID: 9, SKUID: 13, Quantity: 1})
+	if err != nil {
+		t.Fatalf("AdmitSeckill() error = %v", err)
+	}
+	if _, err := store.Confirm(context.Background(), reservation.ReservationID, reservation.OrderID); err != nil {
+		t.Fatalf("Confirm() error = %v", err)
+	}
+	if _, err := store.Restock(context.Background(), reservation.ReservationID, reservation.OrderID); err != nil {
+		t.Fatalf("Restock() error = %v", err)
+	}
+	if store.AvailableStock(13) != 1 {
+		t.Fatalf("available stock after restock = %d, want 1", store.AvailableStock(13))
+	}
+	if _, err := store.AdmitSeckill(context.Background(), SeckillAdmissionCommand{RequestID: "new-request", OrderID: "new-order", ActivityID: 100, UserID: 9, SKUID: 13, Quantity: 1}); err != nil {
+		t.Fatalf("AdmitSeckill(after restock) error = %v", err)
 	}
 }
 
@@ -78,6 +106,20 @@ func TestMemoryStoreSeckillReleaseRollsBackPurchaseLimit(t *testing.T) {
 	}
 	if _, err := store.AdmitSeckill(context.Background(), SeckillAdmissionCommand{RequestID: "request-4", ActivityID: 200, UserID: 9, SKUID: 8, Quantity: 1}); err != nil {
 		t.Fatalf("AdmitSeckill(other activity) error = %v", err)
+	}
+}
+
+func TestMemoryStoreSeckillBindsOrderDuringAdmission(t *testing.T) {
+	store := NewMemoryStore(map[uint64]int32{12: 2}, 1)
+	reservation, err := store.AdmitSeckill(context.Background(), SeckillAdmissionCommand{RequestID: "request-bind", OrderID: "order-bind", ActivityID: 100, UserID: 9, SKUID: 12, Quantity: 1})
+	if err != nil {
+		t.Fatalf("AdmitSeckill() error = %v", err)
+	}
+	if reservation.OrderID != "order-bind" {
+		t.Fatalf("reservation order_id = %q, want order-bind", reservation.OrderID)
+	}
+	if _, err := store.Release(context.Background(), reservation.ReservationID, "another-order"); err != ErrConflict {
+		t.Fatalf("Release(foreign order) error = %v, want %v", err, ErrConflict)
 	}
 }
 
@@ -111,6 +153,17 @@ func TestInventoryServerOverBufconn(t *testing.T) {
 	released, err := client.Release(ctx, &pb.InventoryReservationRequest{ReservationId: "grpc-reserve", OrderId: "grpc-order"})
 	if err != nil || released.GetStatus() != ReservationReleased {
 		t.Fatalf("Release() response=%+v error=%v", released, err)
+	}
+	confirmed, err := client.Reserve(ctx, &pb.InventoryReserveRequest{ReservationId: "grpc-confirm", OrderId: "grpc-order-2", UserId: 1, SkuId: 9, Quantity: 1, Mode: "normal"})
+	if err != nil {
+		t.Fatalf("Reserve(confirm) error = %v", err)
+	}
+	if _, err := client.Confirm(ctx, &pb.InventoryReservationRequest{ReservationId: confirmed.GetReservationId(), OrderId: "grpc-order-2"}); err != nil {
+		t.Fatalf("Confirm() error = %v", err)
+	}
+	restocked, err := client.Restock(ctx, &pb.InventoryReservationRequest{ReservationId: confirmed.GetReservationId(), OrderId: "grpc-order-2"})
+	if err != nil || restocked.GetStatus() != ReservationRestocked {
+		t.Fatalf("Restock() response=%+v error=%v", restocked, err)
 	}
 	_, err = client.Reserve(ctx, &pb.InventoryReserveRequest{ReservationId: "bad/id", OrderId: "order", UserId: 1, SkuId: 9, Quantity: 1})
 	if status.Code(err) != codes.InvalidArgument {

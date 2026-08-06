@@ -36,7 +36,7 @@ var serviceBoundaryCatalog = []ServiceBoundary{
 	},
 	{
 		Service:                 ServiceOrder,
-		OwnedData:               []string{"commerce_orders", "order_items", "order_status_history", "order_outbox_events", "order_inbox_events"},
+		OwnedData:               []string{"commerce_orders", "order_items", "order_status_history", "order_create_intents", "order_operations", "order_outbox_events", "order_inbox_events"},
 		SynchronousDependencies: []string{ServiceCatalog, ServiceIdentity, ServiceInventory},
 		PublishedEvents:         []string{EventOrderCreated, EventOrderCancelled},
 		ConsumedEvents:          []string{EventPaymentSucceeded, EventPaymentRefunded, EventInventoryReserved, EventInventoryReleased, EventShipmentCreated, EventShipmentDelivered},

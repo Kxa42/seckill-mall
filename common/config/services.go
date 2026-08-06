@@ -25,6 +25,8 @@ type ServiceDefinition struct {
 	RedisDB       int    `mapstructure:"redis_db"`
 	Store         string `mapstructure:"store"`
 	PurchaseLimit int32  `mapstructure:"purchase_limit"`
+	// MetricsPort 为可选；留空则不启动独立 metrics server。
+	MetricsPort string `mapstructure:"metrics_port"`
 }
 
 // GatewayDefinition 描述统一配置模板中的 Gateway 运行配置。
@@ -33,6 +35,18 @@ type GatewayDefinition struct {
 	HTTPAddress string `mapstructure:"http_address"`
 	EtcdAddr    string `mapstructure:"etcd_addr"`
 	CommerceURL string `mapstructure:"commerce_url"`
+	// MetricsPort 为可选；留空则不启动独立 metrics server。
+	MetricsPort string `mapstructure:"metrics_port"`
+	// Mode 控制 debug 路由（如本地模拟登录）；留空按 release 处理。
+	Mode string `mapstructure:"mode"`
+	// JWT 为可选；本地调试登录需要 Expire 与 Secret。
+	JWT GatewayJWTDefinition `mapstructure:"jwt"`
+}
+
+// GatewayJWTDefinition 仅保留 Gateway 本地调试登录所需的 JWT 字段。
+type GatewayJWTDefinition struct {
+	Expire string `mapstructure:"expire"`
+	Secret string `mapstructure:"secret"`
 }
 
 type serviceManifest struct {
@@ -41,7 +55,9 @@ type serviceManifest struct {
 }
 
 // LoadServiceRuntimeConfig 从统一商城配置模板加载指定角色。
-// 只展开当前角色需要的敏感环境变量，避免 Gateway 或单个业务服务读取其他服务的 DSN。
+// 必填字段（name/address/etcd_addr）缺失或引用的环境变量缺失会在启动前失败；
+// 可选凭据（mysql_dsn/rabbitmq_url/redis_password）缺失则回退为空，保持服务可在
+// 无 Docker / 无外部位点环境以内存或本地模式启动。错误信息不包含任何变量值。
 func LoadServiceRuntimeConfig(path, role string) (*Config, error) {
 	manifest, err := readServiceManifest(path)
 	if err != nil {
@@ -57,14 +73,24 @@ func LoadServiceRuntimeConfig(path, role string) (*Config, error) {
 		if err := expandGatewayDefinition(&manifest.Gateway); err != nil {
 			return nil, err
 		}
+		if err := validateGatewayDefinition(manifest.Gateway); err != nil {
+			return nil, err
+		}
 		port, err := portFromAddress(manifest.Gateway.HTTPAddress)
 		if err != nil {
 			return nil, fmt.Errorf("gateway http_address is invalid")
 		}
-		cfg.Server = ServerConfig{Name: manifest.Gateway.Name, Port: port}
+		cfg.Server = ServerConfig{
+			Name:        manifest.Gateway.Name,
+			Mode:        gatewayModeOrDefault(manifest.Gateway.Mode),
+			Port:        port,
+			MetricsPort: strings.TrimSpace(manifest.Gateway.MetricsPort),
+		}
 		cfg.Etcd.Addr = manifest.Gateway.EtcdAddr
 		cfg.Commerce.URL = manifest.Gateway.CommerceURL
-		for _, serviceRole := range []string{"catalog", "inventory"} {
+		cfg.JWT.Expire = strings.TrimSpace(manifest.Gateway.JWT.Expire)
+		cfg.JWT.Secret = strings.TrimSpace(manifest.Gateway.JWT.Secret)
+		for _, serviceRole := range []string{"catalog", "inventory", "order"} {
 			definition, ok := manifest.Services[serviceRole]
 			if !ok {
 				return nil, fmt.Errorf("service %q is missing from configuration", serviceRole)
@@ -72,15 +98,18 @@ func LoadServiceRuntimeConfig(path, role string) (*Config, error) {
 			if err := expandDiscoveryDefinition(&definition); err != nil {
 				return nil, fmt.Errorf("service %q configuration: %w", serviceRole, err)
 			}
-			if err := validateServiceDefinition(serviceRole, definition); err != nil {
+			if err := validateDiscoveryDefinition(serviceRole, definition); err != nil {
 				return nil, err
 			}
 			if serviceRole == "catalog" {
 				cfg.Catalog.ServiceName = definition.Name
 				cfg.Catalog.Address = definition.Address
-			} else {
+			} else if serviceRole == "inventory" {
 				cfg.Inventory.ServiceName = definition.Name
 				cfg.Inventory.Address = definition.Address
+			} else {
+				cfg.Order.ServiceName = definition.Name
+				cfg.Order.Address = definition.Address
 			}
 		}
 		return cfg, nil
@@ -96,7 +125,12 @@ func LoadServiceRuntimeConfig(path, role string) (*Config, error) {
 	if err := validateServiceDefinition(role, definition); err != nil {
 		return nil, err
 	}
-	cfg.Server = ServerConfig{Name: definition.Name}
+	cfg.Server = ServerConfig{
+		Name:        definition.Name,
+		Mode:        serverModeOrDefault(definition.Store),
+		Port:        "",
+		MetricsPort: strings.TrimSpace(definition.MetricsPort),
+	}
 	cfg.Server.Port, err = portFromAddress(definition.Address)
 	if err != nil {
 		return nil, fmt.Errorf("service %q address is invalid", role)
@@ -107,6 +141,8 @@ func LoadServiceRuntimeConfig(path, role string) (*Config, error) {
 	cfg.Redis = RedisConfig{Addr: definition.RedisAddr, Password: definition.RedisPassword, DB: definition.RedisDB}
 
 	switch role {
+	case "identity":
+		cfg.Identity = IdentityConfig{ServiceName: definition.Name, Address: definition.Address, MySQLDSN: definition.MySQLDSN}
 	case "catalog":
 		cfg.Catalog = CatalogConfig{ServiceName: definition.Name, Address: definition.Address, MySQLDSN: definition.MySQLDSN}
 	case "inventory":
@@ -116,6 +152,28 @@ func LoadServiceRuntimeConfig(path, role string) (*Config, error) {
 			RedisDB: definition.RedisDB, PurchaseLimit: definition.PurchaseLimit,
 		}
 		cfg.Seckill.PurchaseLimit = int64(definition.PurchaseLimit)
+	case "order":
+		cfg.Order = OrderConfig{ServiceName: definition.Name, Address: definition.Address, MySQLDSN: definition.MySQLDSN}
+		for _, dependency := range []string{"catalog", "identity", "inventory"} {
+			dependencyDefinition, exists := manifest.Services[dependency]
+			if !exists {
+				return nil, fmt.Errorf("service %q is missing from configuration", dependency)
+			}
+			if err := expandDiscoveryDefinition(&dependencyDefinition); err != nil {
+				return nil, fmt.Errorf("service %q configuration: %w", dependency, err)
+			}
+			if err := validateDiscoveryDefinition(dependency, dependencyDefinition); err != nil {
+				return nil, err
+			}
+			switch dependency {
+			case "catalog":
+				cfg.Catalog = CatalogConfig{ServiceName: dependencyDefinition.Name, Address: dependencyDefinition.Address}
+			case "identity":
+				cfg.Identity = IdentityConfig{ServiceName: dependencyDefinition.Name, Address: dependencyDefinition.Address}
+			case "inventory":
+				cfg.Inventory = InventoryConfig{ServiceName: dependencyDefinition.Name, Address: dependencyDefinition.Address}
+			}
+		}
 	}
 	return cfg, nil
 }
@@ -137,49 +195,131 @@ func readServiceManifest(path string) (serviceManifest, error) {
 	return manifest, nil
 }
 
+// expandServiceDefinition 展开必填的发现字段和可选的业务凭据。
+// 可选凭据字段即使 ${VAR} 变量缺失也回退为空值，避免强制要求无 Docker 环境必须配置外部依赖。
 func expandServiceDefinition(definition *ServiceDefinition) error {
 	if err := expandDiscoveryDefinition(definition); err != nil {
 		return err
 	}
-	if err := expandNamedField("mysql_dsn", &definition.MySQLDSN); err != nil {
-		return err
+	optionalFields := map[string]*string{
+		"mysql_dsn":      &definition.MySQLDSN,
+		"rabbitmq_url":   &definition.RabbitMQURL,
+		"redis_addr":     &definition.RedisAddr,
+		"redis_password": &definition.RedisPassword,
 	}
-	if err := expandNamedField("rabbitmq_url", &definition.RabbitMQURL); err != nil {
-		return err
-	}
-	if err := expandNamedField("redis_password", &definition.RedisPassword); err != nil {
-		return err
+	for name, value := range optionalFields {
+		expanded, err := expandOptionalEnv(value)
+		if err != nil {
+			return fmt.Errorf("%s: %w", name, err)
+		}
+		*value = expanded
 	}
 	return nil
 }
 
 func expandDiscoveryDefinition(definition *ServiceDefinition) error {
-	if err := expandNamedField("name", &definition.Name); err != nil {
-		return err
+	for name, value := range map[string]*string{
+		"name":      &definition.Name,
+		"address":   &definition.Address,
+		"etcd_addr": &definition.EtcdAddr,
+	} {
+		expanded, err := expandEnv(value)
+		if err != nil {
+			return fmt.Errorf("%s: %w", name, err)
+		}
+		*value = expanded
 	}
-	if err := expandNamedField("address", &definition.Address); err != nil {
-		return err
-	}
-	if err := expandNamedField("etcd_addr", &definition.EtcdAddr); err != nil {
+	if err := expandNamedField("metrics_port", &definition.MetricsPort); err != nil {
 		return err
 	}
 	return nil
 }
 
 func expandGatewayDefinition(definition *GatewayDefinition) error {
-	if err := expandNamedField("gateway name", &definition.Name); err != nil {
+	for name, value := range map[string]*string{
+		"name":         &definition.Name,
+		"http_address": &definition.HTTPAddress,
+		"etcd_addr":    &definition.EtcdAddr,
+		"commerce_url": &definition.CommerceURL,
+	} {
+		expanded, err := expandEnv(value)
+		if err != nil {
+			return fmt.Errorf("gateway %s: %w", name, err)
+		}
+		*value = expanded
+	}
+	// gateway metrics_port 与 jwt 凭据均为可选。
+	if err := expandOptionalField("gateway metrics_port", &definition.MetricsPort); err != nil {
 		return err
 	}
-	if err := expandNamedField("gateway http_address", &definition.HTTPAddress); err != nil {
+	if err := expandOptionalField("gateway jwt.expire", &definition.JWT.Expire); err != nil {
 		return err
 	}
-	if err := expandNamedField("gateway etcd_addr", &definition.EtcdAddr); err != nil {
-		return err
-	}
-	if err := expandNamedField("gateway commerce_url", &definition.CommerceURL); err != nil {
+	if err := expandOptionalField("gateway jwt.secret", &definition.JWT.Secret); err != nil {
 		return err
 	}
 	return nil
+}
+
+// validateGatewayDefinition 校验 Gateway 必填字段并验证服务发现目标存在。
+func validateGatewayDefinition(gateway GatewayDefinition) error {
+	if strings.TrimSpace(gateway.Name) == "" {
+		return fmt.Errorf("gateway name is required")
+	}
+	if strings.TrimSpace(gateway.HTTPAddress) == "" {
+		return fmt.Errorf("gateway http_address is required")
+	}
+	if strings.TrimSpace(gateway.EtcdAddr) == "" {
+		return fmt.Errorf("gateway etcd_addr is required")
+	}
+	return nil
+}
+
+// validateServiceDefinition 校验业务服务必填字段，并对 inventory 的 redis store 做必填校验。
+func validateServiceDefinition(role string, definition ServiceDefinition) error {
+	if err := validateDiscoveryDefinition(role, definition); err != nil {
+		return err
+	}
+	if role == "inventory" && strings.EqualFold(strings.TrimSpace(definition.Store), "redis") {
+		if strings.TrimSpace(definition.RedisAddr) == "" {
+			return fmt.Errorf("service %q redis_addr is required when store is redis", role)
+		}
+	}
+	return nil
+}
+
+// validateDiscoveryDefinition 校验服务发现必填字段，供 Gateway 角色加载目标服务时复用。
+func validateDiscoveryDefinition(role string, definition ServiceDefinition) error {
+	if strings.TrimSpace(definition.Name) == "" {
+		return fmt.Errorf("service %q name is required", role)
+	}
+	if strings.TrimSpace(definition.Address) == "" {
+		return fmt.Errorf("service %q address is required", role)
+	}
+	if strings.TrimSpace(definition.EtcdAddr) == "" {
+		return fmt.Errorf("service %q etcd_addr is required", role)
+	}
+	if _, err := portFromAddress(definition.Address); err != nil {
+		return fmt.Errorf("service %q address is invalid", role)
+	}
+	return nil
+}
+
+func gatewayModeOrDefault(mode string) string {
+	if mode = strings.TrimSpace(mode); mode != "" {
+		return mode
+	}
+	return "release"
+}
+
+// serverModeOrDefault 为业务服务计算默认 Mode：inventory 的 store 为空时按 debug 回退内存存储，
+// 与既有独立 YAML 在未显式配置 Mode 时的行为保持一致。
+func serverModeOrDefault(store string) string {
+	store = strings.TrimSpace(store)
+	if store == "" {
+		return "debug"
+	}
+	return "release"
 }
 
 func expandNamedField(name string, value *string) error {
@@ -191,7 +331,28 @@ func expandNamedField(name string, value *string) error {
 	return nil
 }
 
+// expandOptionalField 展开可选字段：缺失 ${VAR} 变量时回退为空值，不返回错误。
+func expandOptionalField(name string, value *string) error {
+	expanded, err := expandOptionalEnv(value)
+	if err != nil {
+		return fmt.Errorf("%s: %w", name, err)
+	}
+	*value = expanded
+	return nil
+}
+
 func expandEnv(value *string) (string, error) {
+	return expandWithPolicy(value, true)
+}
+
+func expandOptionalEnv(value *string) (string, error) {
+	return expandWithPolicy(value, false)
+}
+
+// expandWithPolicy 用 os.Expand 展开 ${VAR}。
+// required 为 true 时，缺失变量视为错误（用于 name/address/etcd_addr 等必填项）；
+// required 为 false 时，缺失变量回退为空字符串（用于可选凭据），缺失错误只包含变量名不包含值。
+func expandWithPolicy(value *string, required bool) (string, error) {
 	missing := make(map[string]struct{})
 	expanded := os.Expand(*value, func(key string) string {
 		resolved, ok := os.LookupEnv(key)
@@ -204,25 +365,15 @@ func expandEnv(value *string) (string, error) {
 	if len(missing) == 0 {
 		return expanded, nil
 	}
+	if !required {
+		return "", nil
+	}
 	keys := make([]string, 0, len(missing))
 	for key := range missing {
 		keys = append(keys, key)
 	}
 	sort.Strings(keys)
 	return "", fmt.Errorf("missing environment variables: %s", strings.Join(keys, ", "))
-}
-
-func validateServiceDefinition(role string, definition ServiceDefinition) error {
-	if strings.TrimSpace(definition.Name) == "" {
-		return fmt.Errorf("service %q name is required", role)
-	}
-	if strings.TrimSpace(definition.Address) == "" {
-		return fmt.Errorf("service %q address is required", role)
-	}
-	if _, err := portFromAddress(definition.Address); err != nil {
-		return fmt.Errorf("service %q address is invalid", role)
-	}
-	return nil
 }
 
 func portFromAddress(address string) (string, error) {

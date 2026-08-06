@@ -19,8 +19,15 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	CommerceOrderService_Create_FullMethodName = "/commerce.order.v1.CommerceOrderService/Create"
-	CommerceOrderService_Get_FullMethodName    = "/commerce.order.v1.CommerceOrderService/Get"
+	CommerceOrderService_Create_FullMethodName         = "/commerce.order.v1.CommerceOrderService/Create"
+	CommerceOrderService_Get_FullMethodName            = "/commerce.order.v1.CommerceOrderService/Get"
+	CommerceOrderService_List_FullMethodName           = "/commerce.order.v1.CommerceOrderService/List"
+	CommerceOrderService_Cancel_FullMethodName         = "/commerce.order.v1.CommerceOrderService/Cancel"
+	CommerceOrderService_Expire_FullMethodName         = "/commerce.order.v1.CommerceOrderService/Expire"
+	CommerceOrderService_ConfirmPayment_FullMethodName = "/commerce.order.v1.CommerceOrderService/ConfirmPayment"
+	CommerceOrderService_Ship_FullMethodName           = "/commerce.order.v1.CommerceOrderService/Ship"
+	CommerceOrderService_ConfirmReceipt_FullMethodName = "/commerce.order.v1.CommerceOrderService/ConfirmReceipt"
+	CommerceOrderService_Refund_FullMethodName         = "/commerce.order.v1.CommerceOrderService/Refund"
 )
 
 // CommerceOrderServiceClient is the client API for CommerceOrderService service.
@@ -29,6 +36,13 @@ const (
 type CommerceOrderServiceClient interface {
 	Create(ctx context.Context, in *OrderCreateRequest, opts ...grpc.CallOption) (*OrderCreateResponse, error)
 	Get(ctx context.Context, in *OrderGetRequest, opts ...grpc.CallOption) (*OrderGetResponse, error)
+	List(ctx context.Context, in *OrderListRequest, opts ...grpc.CallOption) (*OrderListResponse, error)
+	Cancel(ctx context.Context, in *OrderCancelRequest, opts ...grpc.CallOption) (*OrderCancelResponse, error)
+	Expire(ctx context.Context, in *OrderExpireRequest, opts ...grpc.CallOption) (*OrderExpireResponse, error)
+	ConfirmPayment(ctx context.Context, in *OrderPaymentConfirmRequest, opts ...grpc.CallOption) (*OrderTransitionResponse, error)
+	Ship(ctx context.Context, in *OrderShipRequest, opts ...grpc.CallOption) (*OrderTransitionResponse, error)
+	ConfirmReceipt(ctx context.Context, in *OrderConfirmReceiptRequest, opts ...grpc.CallOption) (*OrderTransitionResponse, error)
+	Refund(ctx context.Context, in *OrderRefundRequest, opts ...grpc.CallOption) (*OrderTransitionResponse, error)
 }
 
 type commerceOrderServiceClient struct {
@@ -59,12 +73,89 @@ func (c *commerceOrderServiceClient) Get(ctx context.Context, in *OrderGetReques
 	return out, nil
 }
 
+func (c *commerceOrderServiceClient) List(ctx context.Context, in *OrderListRequest, opts ...grpc.CallOption) (*OrderListResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(OrderListResponse)
+	err := c.cc.Invoke(ctx, CommerceOrderService_List_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *commerceOrderServiceClient) Cancel(ctx context.Context, in *OrderCancelRequest, opts ...grpc.CallOption) (*OrderCancelResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(OrderCancelResponse)
+	err := c.cc.Invoke(ctx, CommerceOrderService_Cancel_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *commerceOrderServiceClient) Expire(ctx context.Context, in *OrderExpireRequest, opts ...grpc.CallOption) (*OrderExpireResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(OrderExpireResponse)
+	err := c.cc.Invoke(ctx, CommerceOrderService_Expire_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *commerceOrderServiceClient) ConfirmPayment(ctx context.Context, in *OrderPaymentConfirmRequest, opts ...grpc.CallOption) (*OrderTransitionResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(OrderTransitionResponse)
+	err := c.cc.Invoke(ctx, CommerceOrderService_ConfirmPayment_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *commerceOrderServiceClient) Ship(ctx context.Context, in *OrderShipRequest, opts ...grpc.CallOption) (*OrderTransitionResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(OrderTransitionResponse)
+	err := c.cc.Invoke(ctx, CommerceOrderService_Ship_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *commerceOrderServiceClient) ConfirmReceipt(ctx context.Context, in *OrderConfirmReceiptRequest, opts ...grpc.CallOption) (*OrderTransitionResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(OrderTransitionResponse)
+	err := c.cc.Invoke(ctx, CommerceOrderService_ConfirmReceipt_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *commerceOrderServiceClient) Refund(ctx context.Context, in *OrderRefundRequest, opts ...grpc.CallOption) (*OrderTransitionResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(OrderTransitionResponse)
+	err := c.cc.Invoke(ctx, CommerceOrderService_Refund_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // CommerceOrderServiceServer is the server API for CommerceOrderService service.
 // All implementations must embed UnimplementedCommerceOrderServiceServer
 // for forward compatibility.
 type CommerceOrderServiceServer interface {
 	Create(context.Context, *OrderCreateRequest) (*OrderCreateResponse, error)
 	Get(context.Context, *OrderGetRequest) (*OrderGetResponse, error)
+	List(context.Context, *OrderListRequest) (*OrderListResponse, error)
+	Cancel(context.Context, *OrderCancelRequest) (*OrderCancelResponse, error)
+	Expire(context.Context, *OrderExpireRequest) (*OrderExpireResponse, error)
+	ConfirmPayment(context.Context, *OrderPaymentConfirmRequest) (*OrderTransitionResponse, error)
+	Ship(context.Context, *OrderShipRequest) (*OrderTransitionResponse, error)
+	ConfirmReceipt(context.Context, *OrderConfirmReceiptRequest) (*OrderTransitionResponse, error)
+	Refund(context.Context, *OrderRefundRequest) (*OrderTransitionResponse, error)
 	mustEmbedUnimplementedCommerceOrderServiceServer()
 }
 
@@ -80,6 +171,27 @@ func (UnimplementedCommerceOrderServiceServer) Create(context.Context, *OrderCre
 }
 func (UnimplementedCommerceOrderServiceServer) Get(context.Context, *OrderGetRequest) (*OrderGetResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method Get not implemented")
+}
+func (UnimplementedCommerceOrderServiceServer) List(context.Context, *OrderListRequest) (*OrderListResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method List not implemented")
+}
+func (UnimplementedCommerceOrderServiceServer) Cancel(context.Context, *OrderCancelRequest) (*OrderCancelResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method Cancel not implemented")
+}
+func (UnimplementedCommerceOrderServiceServer) Expire(context.Context, *OrderExpireRequest) (*OrderExpireResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method Expire not implemented")
+}
+func (UnimplementedCommerceOrderServiceServer) ConfirmPayment(context.Context, *OrderPaymentConfirmRequest) (*OrderTransitionResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ConfirmPayment not implemented")
+}
+func (UnimplementedCommerceOrderServiceServer) Ship(context.Context, *OrderShipRequest) (*OrderTransitionResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method Ship not implemented")
+}
+func (UnimplementedCommerceOrderServiceServer) ConfirmReceipt(context.Context, *OrderConfirmReceiptRequest) (*OrderTransitionResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ConfirmReceipt not implemented")
+}
+func (UnimplementedCommerceOrderServiceServer) Refund(context.Context, *OrderRefundRequest) (*OrderTransitionResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method Refund not implemented")
 }
 func (UnimplementedCommerceOrderServiceServer) mustEmbedUnimplementedCommerceOrderServiceServer() {}
 func (UnimplementedCommerceOrderServiceServer) testEmbeddedByValue()                              {}
@@ -138,6 +250,132 @@ func _CommerceOrderService_Get_Handler(srv interface{}, ctx context.Context, dec
 	return interceptor(ctx, in, info, handler)
 }
 
+func _CommerceOrderService_List_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(OrderListRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(CommerceOrderServiceServer).List(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: CommerceOrderService_List_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(CommerceOrderServiceServer).List(ctx, req.(*OrderListRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _CommerceOrderService_Cancel_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(OrderCancelRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(CommerceOrderServiceServer).Cancel(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: CommerceOrderService_Cancel_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(CommerceOrderServiceServer).Cancel(ctx, req.(*OrderCancelRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _CommerceOrderService_Expire_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(OrderExpireRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(CommerceOrderServiceServer).Expire(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: CommerceOrderService_Expire_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(CommerceOrderServiceServer).Expire(ctx, req.(*OrderExpireRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _CommerceOrderService_ConfirmPayment_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(OrderPaymentConfirmRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(CommerceOrderServiceServer).ConfirmPayment(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: CommerceOrderService_ConfirmPayment_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(CommerceOrderServiceServer).ConfirmPayment(ctx, req.(*OrderPaymentConfirmRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _CommerceOrderService_Ship_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(OrderShipRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(CommerceOrderServiceServer).Ship(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: CommerceOrderService_Ship_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(CommerceOrderServiceServer).Ship(ctx, req.(*OrderShipRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _CommerceOrderService_ConfirmReceipt_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(OrderConfirmReceiptRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(CommerceOrderServiceServer).ConfirmReceipt(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: CommerceOrderService_ConfirmReceipt_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(CommerceOrderServiceServer).ConfirmReceipt(ctx, req.(*OrderConfirmReceiptRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _CommerceOrderService_Refund_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(OrderRefundRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(CommerceOrderServiceServer).Refund(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: CommerceOrderService_Refund_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(CommerceOrderServiceServer).Refund(ctx, req.(*OrderRefundRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // CommerceOrderService_ServiceDesc is the grpc.ServiceDesc for CommerceOrderService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -152,6 +390,34 @@ var CommerceOrderService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "Get",
 			Handler:    _CommerceOrderService_Get_Handler,
+		},
+		{
+			MethodName: "List",
+			Handler:    _CommerceOrderService_List_Handler,
+		},
+		{
+			MethodName: "Cancel",
+			Handler:    _CommerceOrderService_Cancel_Handler,
+		},
+		{
+			MethodName: "Expire",
+			Handler:    _CommerceOrderService_Expire_Handler,
+		},
+		{
+			MethodName: "ConfirmPayment",
+			Handler:    _CommerceOrderService_ConfirmPayment_Handler,
+		},
+		{
+			MethodName: "Ship",
+			Handler:    _CommerceOrderService_Ship_Handler,
+		},
+		{
+			MethodName: "ConfirmReceipt",
+			Handler:    _CommerceOrderService_ConfirmReceipt_Handler,
+		},
+		{
+			MethodName: "Refund",
+			Handler:    _CommerceOrderService_Refund_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

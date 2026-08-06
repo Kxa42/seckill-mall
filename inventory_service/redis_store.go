@@ -33,7 +33,7 @@ local stock = tonumber(redis.call('GET', KEYS[1])) or 0
 if stock < quantity then return 2 end
 redis.call('DECRBY', KEYS[1], quantity)
 redis.call('HINCRBY', KEYS[2], ARGV[2], quantity)
-redis.call('HSET', KEYS[3], 'status', 'reserved', 'order_id', '', 'user_id', ARGV[2], 'activity_id', ARGV[5], 'sku_id', ARGV[3], 'quantity', ARGV[1], 'mode', 'seckill', 'created_at', ARGV[6], 'updated_at', ARGV[6])
+redis.call('HSET', KEYS[3], 'status', 'reserved', 'order_id', ARGV[6], 'user_id', ARGV[2], 'activity_id', ARGV[5], 'sku_id', ARGV[3], 'quantity', ARGV[1], 'mode', 'seckill', 'created_at', ARGV[7], 'updated_at', ARGV[7])
 return 1
 `
 
@@ -43,8 +43,10 @@ if not current then return 0 end
 local currentOrder = redis.call('HGET', KEYS[3], 'order_id') or ''
 if ARGV[4] ~= '' and currentOrder ~= '' and currentOrder ~= ARGV[4] then return 5 end
 if current == ARGV[2] then return 1 end
-if current ~= 'reserved' then return 4 end
-if ARGV[1] == 'released' then
+local expected = 'reserved'
+if ARGV[1] == 'restocked' then expected = 'confirmed' end
+if current ~= expected then return 4 end
+if ARGV[1] == 'released' or ARGV[1] == 'restocked' then
 	local quantity = tonumber(redis.call('HGET', KEYS[3], 'quantity'))
 	redis.call('INCRBY', KEYS[1], quantity)
 	local mode = redis.call('HGET', KEYS[3], 'mode') or ''
@@ -136,13 +138,17 @@ func (s *RedisStore) Release(ctx context.Context, reservationID, orderID string)
 	return s.transition(ctx, reservationID, orderID, ReservationReleased)
 }
 
+func (s *RedisStore) Restock(ctx context.Context, reservationID, orderID string) (Reservation, error) {
+	return s.transition(ctx, reservationID, orderID, ReservationRestocked)
+}
+
 func (s *RedisStore) AdmitSeckill(ctx context.Context, command SeckillAdmissionCommand) (Reservation, error) {
 	if !validOpaqueID(command.RequestID) || command.ActivityID == 0 || command.UserID == 0 || command.SKUID == 0 || command.Quantity <= 0 {
 		return Reservation{}, ErrInvalidRequest
 	}
 	reservationID := "admit_" + command.RequestID
 	now := s.now()
-	code, err := s.client.Eval(ctx, seckillLua, []string{s.stockKey(command.SKUID), s.userKey(command.ActivityID, command.SKUID), s.reservationKey(reservationID)}, command.Quantity, command.UserID, command.SKUID, s.purchaseLimit, command.ActivityID, now.UnixNano()).Int()
+	code, err := s.client.Eval(ctx, seckillLua, []string{s.stockKey(command.SKUID), s.userKey(command.ActivityID, command.SKUID), s.reservationKey(reservationID)}, command.Quantity, command.UserID, command.SKUID, s.purchaseLimit, command.ActivityID, command.OrderID, now.UnixNano()).Int()
 	if err != nil {
 		return Reservation{}, err
 	}
@@ -156,7 +162,7 @@ func (s *RedisStore) AdmitSeckill(ctx context.Context, command SeckillAdmissionC
 		if loadErr != nil {
 			return Reservation{}, loadErr
 		}
-		if code == 10 && (reservation.ActivityID != command.ActivityID || reservation.UserID != command.UserID || reservation.SKUID != command.SKUID || reservation.Quantity != command.Quantity) {
+		if code == 10 && (reservation.ActivityID != command.ActivityID || reservation.UserID != command.UserID || reservation.SKUID != command.SKUID || reservation.Quantity != command.Quantity || (command.OrderID != "" && reservation.OrderID != command.OrderID)) {
 			return Reservation{}, ErrConflict
 		}
 		return reservation, nil

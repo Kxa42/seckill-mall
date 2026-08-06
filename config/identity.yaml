@@ -1,0 +1,14 @@
+# Identity 地址快照适配器的阶段 3 本地配置。
+server:
+  name: "identity-service"
+  mode: "debug"
+  port: "51001"
+  metrics_port: ""
+
+identity:
+  service_name: "identity-service"
+  address: "127.0.0.1:51001"
+  mysql_dsn: ""
+
+etcd:
+  addr: "127.0.0.1:2379"

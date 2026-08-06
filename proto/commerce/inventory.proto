@@ -30,6 +30,7 @@ message InventorySeckillAdmitRequest {
   uint64 user_id = 3;
   uint64 sku_id = 4;
   int32 quantity = 5;
+  string order_id = 6;
 }
 
 message InventorySeckillAdmitResponse {
@@ -42,5 +43,8 @@ service InventoryService {
   rpc Reserve(InventoryReserveRequest) returns (InventoryReservationResponse);
   rpc Confirm(InventoryReservationRequest) returns (InventoryReservationResponse);
   rpc Release(InventoryReservationRequest) returns (InventoryReservationResponse);
+  // Restock only reverses a confirmed reservation after a successful refund.
+  // It is intentionally separate from Release, which only handles pre-payment reservations.
+  rpc Restock(InventoryReservationRequest) returns (InventoryReservationResponse);
   rpc AdmitSeckill(InventorySeckillAdmitRequest) returns (InventorySeckillAdmitResponse);
 }

@@ -1,11 +1,11 @@
 # Commerce API
 
 ## 目的
-提供不依赖前端的完整商城后端 MVP，并统一普通订单和新秒杀订单的交易状态。
+提供身份、购物车、支付和履约过渡 API；新商城订单的唯一创建与状态转换由 Order Service 承担。
 
 ## 模块概述
-- **职责:** 用户认证、地址、商品目录、购物车、库存预占、订单、Mock 支付、履约、退款和超时关单。
-- **状态:** 🚧开发中（MVP 已实现，外部集成待补）
+- **职责:** 用户认证、地址过渡、购物车、结算预览、Mock 支付、物流/收货/退款过渡记录，以及 legacy 模式兼容。
+- **状态:** 🚧第 3 阶段过渡中
 - **最后更新:** 2026-08-06
 
 ## 规范
@@ -31,32 +31,32 @@
 **模块:** Commerce Order、Inventory、Payment、Fulfillment
 
 #### 场景: 用户从购物车结算
-- `Idempotency-Key` 在用户范围内唯一，重复请求返回同一订单。
-- 订单保存商品、价格和地址快照，并在事务中预占库存。
-- Mock 支付确认库存，admin 发货，订单所有者确认收货。
+- `legacy` 模式仍可由 Commerce Repository 处理历史兼容订单；`order_service` 模式关闭 Commerce 创建订单和超时 worker。
+- 新模式通过 Order gRPC 确认支付、发货、收货和退款，Commerce 不直接修改新订单状态。
+- 支付/物流/退款过渡记录用于外部模块兼容，重试入口必须允许 Order 状态幂等确认。
 
 ### 需求: 取消与退款
 **模块:** Commerce Order、Payment、Inventory
 
 #### 场景: 用户取消或申请退款
 - 待支付订单取消或超时后释放预占库存。
-- 已支付未发货订单可执行幂等 Mock 退款并恢复可用库存。
+- 已支付或已发货订单可执行幂等 Mock 退款；Order 先通过 Inventory `Restock` 恢复已确认库存。
 - 非法状态转换返回稳定冲突错误并保留状态历史。
 
 ### 需求: 秒杀统一交易
 **模块:** Commerce Inventory、Order
 
 #### 场景: 创建秒杀订单
-- `/api/v1/seckill/orders` 与普通订单共用支付、超时、履约和退款状态机。
-- 当前通过 MySQL 条件更新防止超卖；旧 Redis Lua 准入尚未接入该入口。
+- `/api/v1/seckill/orders` 与普通订单共用 Order 状态机，并由 Order 一次调用带 `order_id` 的 `AdmitSeckill`。
+- 旧 Commerce 秒杀写路径只在 `legacy` 模式保留，不能与 Order Service 同时启用。
 
 ### 需求: 迁移过渡边界
 **模块:** Commerce API、Gateway、Catalog、Inventory
 
 #### 场景: 未完成服务拆分时保持单一扣减路径
 - 商品列表和详情由 Gateway 调用 Catalog；Commerce API 仍保留直连兼容接口供过渡使用。
-- `/api/v1/seckill/orders` 继续由 Commerce 处理，Gateway 不提前调用 Inventory，避免库存重复扣减。
-- 后续 Order Service 完成订单编排后，才能将秒杀下单切换为 Inventory reservation + 事件驱动链路。
+- `/api/v1/orders*` 与 `/api/v1/seckill/orders` 已由 Gateway 显式切换到 Order gRPC，Gateway 不再直接调用 Inventory。
+- Commerce 只保留过渡数据；回退前必须停止 Order 新写入，禁止双写 `commerce_orders`。
 
 ## API 接口
 - 身份与地址: `/api/v1/auth/*`、`/api/v1/addresses*`。
@@ -72,8 +72,12 @@
 
 ## 依赖
 - MySQL；内存 Repository 仅用于开发和验收。
-- Catalog gRPC、Inventory gRPC；Catalog/Inventory 的无 Docker Fake E2E 使用内存实现。
+- Catalog、Identity Snapshot、Inventory、Order gRPC；无 Docker 验收使用 Memory/Fake/bufconn。
 - Gin、GORM、bcrypt、JWT、Prometheus。
+
+## 当前边界
+- Docker daemon 不可用时不执行 MySQL migration 重放、Redis/etcd 健康检查、Compose 启动和真实 gRPC E2E；对应结果必须单独标记为跳过。
+- RabbitMQ Outbox/Inbox 仍属于后续阶段；第三阶段使用同步 gRPC 和本地操作记录，不把 MQ 从项目中删除。
 
 ## 变更历史
 - [202608051526_backend_commerce_mvp](../../history/2026-08/202608051526_backend_commerce_mvp/) - 新增完整商城后端 MVP。

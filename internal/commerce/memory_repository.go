@@ -548,6 +548,95 @@ func (r *MemoryRepository) CreatePayment(_ context.Context, userID uint64, order
 	return payment, nil
 }
 
+func (r *MemoryRepository) GetPayment(_ context.Context, paymentNo string) (Payment, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	payment, exists := r.payments[paymentNo]
+	if !exists {
+		return Payment{}, NewError(CodeNotFound, "支付单不存在", nil)
+	}
+	if order, orderExists := r.orders[payment.OrderID]; orderExists {
+		payment.UserID = order.UserID
+	}
+	return payment, nil
+}
+
+func (r *MemoryRepository) MarkPaymentSucceeded(_ context.Context, paymentNo, callbackRef string, now time.Time) (Payment, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	payment, exists := r.payments[paymentNo]
+	if !exists {
+		return Payment{}, NewError(CodeNotFound, "支付单不存在", nil)
+	}
+	if owner, exists := r.callbackRefs[callbackRef]; exists && owner != paymentNo {
+		return Payment{}, NewError(CodeConflict, "支付回调流水已使用", nil)
+	}
+	if payment.Status == PaymentStatusSucceeded {
+		if payment.CallbackRef != callbackRef {
+			return Payment{}, NewError(CodeConflict, "支付回调与已完成记录不一致", nil)
+		}
+		return payment, nil
+	}
+	payment.Status = PaymentStatusSucceeded
+	payment.CallbackRef = callbackRef
+	payment.PaidAt = timePointer(now)
+	payment.UpdatedAt = now
+	r.payments[paymentNo] = payment
+	r.callbackRefs[callbackRef] = paymentNo
+	return payment, nil
+}
+
+func (r *MemoryRepository) RecordShipment(_ context.Context, orderID, carrier, trackingNo string, now time.Time) (Shipment, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if _, exists := r.orders[orderID]; !exists {
+		return Shipment{}, NewError(CodeNotFound, "订单不存在", nil)
+	}
+	if existing, exists := r.shipments[orderID]; exists {
+		if existing.Carrier != carrier || existing.TrackingNo != trackingNo {
+			return Shipment{}, NewError(CodeConflict, "订单已有不同物流记录", nil)
+		}
+		return existing, nil
+	}
+	shipment := Shipment{ID: r.next(), OrderID: orderID, Carrier: carrier, TrackingNo: trackingNo, Status: ShipmentStatusShipped, ShippedAt: now, CreatedAt: now, UpdatedAt: now}
+	r.shipments[orderID] = shipment
+	return shipment, nil
+}
+
+func (r *MemoryRepository) MarkShipmentReceived(_ context.Context, orderID string, now time.Time) (Shipment, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	shipment, exists := r.shipments[orderID]
+	if !exists {
+		return Shipment{}, NewError(CodeNotFound, "物流记录不存在", nil)
+	}
+	shipment.Status = ShipmentStatusReceived
+	shipment.DeliveredAt = timePointer(now)
+	shipment.UpdatedAt = now
+	r.shipments[orderID] = shipment
+	return shipment, nil
+}
+
+func (r *MemoryRepository) RecordRefund(_ context.Context, userID uint64, orderID, refundNo, reason string, now time.Time) (Refund, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	order, exists := r.orders[orderID]
+	if !exists || order.UserID != userID {
+		return Refund{}, NewError(CodeNotFound, "订单不存在", nil)
+	}
+	if existingNo, exists := r.refundByOrder[orderID]; exists {
+		return r.refunds[existingNo], nil
+	}
+	paymentNo, exists := r.paymentByOrder[orderID]
+	if !exists || r.payments[paymentNo].Status != PaymentStatusSucceeded {
+		return Refund{}, NewError(CodeInvalidTransition, "订单没有成功支付记录", nil)
+	}
+	refund := Refund{ID: r.next(), RefundNo: refundNo, OrderID: orderID, PaymentNo: paymentNo, AmountCents: order.TotalAmountCents, Reason: reason, Status: RefundStatusSucceeded, CreatedAt: now, CompletedAt: timePointer(now)}
+	r.refunds[refundNo] = refund
+	r.refundByOrder[orderID] = refundNo
+	return refund, nil
+}
+
 func (r *MemoryRepository) CompletePayment(_ context.Context, paymentNo, callbackRef string, now time.Time) (Order, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()

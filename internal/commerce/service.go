@@ -20,6 +20,8 @@ type Service struct {
 	auth          *platformauth.Manager
 	paymentSecret []byte
 	orderTTL      time.Duration
+	orderMode     string
+	orderClient   OrderLifecycleClient
 	now           func() time.Time
 	newID         func(prefix string) (string, error)
 }
@@ -40,9 +42,32 @@ func NewService(repository Repository, authManager *platformauth.Manager, paymen
 		auth:          authManager,
 		paymentSecret: []byte(paymentSecret),
 		orderTTL:      orderTTL,
+		orderMode:     OrderWriteModeLegacy,
 		now:           time.Now,
 		newID:         randomID,
 	}, nil
+}
+
+// ConfigureOrderMigration 设置订单写入模式和生命周期客户端。
+// order_service 模式下 Commerce 只保留支付、退款和物流记录，不再直接改变订单状态。
+func (s *Service) ConfigureOrderMigration(mode string, client OrderLifecycleClient) error {
+	mode = strings.TrimSpace(strings.ToLower(mode))
+	if mode == "" {
+		mode = OrderWriteModeLegacy
+	}
+	if mode != OrderWriteModeLegacy && mode != OrderWriteModeOrderService {
+		return fmt.Errorf("订单写入模式无效: %s", mode)
+	}
+	if mode == OrderWriteModeOrderService && client == nil {
+		return errors.New("order_service 模式需要 Order Service 客户端")
+	}
+	s.orderMode = mode
+	s.orderClient = client
+	return nil
+}
+
+func (s *Service) LegacyOrderWritesEnabled() bool {
+	return s.orderMode != OrderWriteModeOrderService
 }
 
 func (s *Service) Register(ctx context.Context, email, password string) (TokenPair, error) {
@@ -247,6 +272,9 @@ func (s *Service) CreateSeckillOrder(ctx context.Context, userID, addressID, sku
 }
 
 func (s *Service) createOrder(ctx context.Context, command CreateOrderCommand) (Order, bool, error) {
+	if !s.LegacyOrderWritesEnabled() {
+		return Order{}, false, NewError(CodeConflict, "订单已切换至 Order Service", nil)
+	}
 	if command.UserID == 0 || command.AddressID == 0 {
 		return Order{}, false, NewError(CodeValidation, "用户和地址不能为空", nil)
 	}
@@ -280,6 +308,9 @@ func (s *Service) GetOrder(ctx context.Context, userID uint64, orderID string) (
 }
 
 func (s *Service) CancelOrder(ctx context.Context, userID uint64, orderID, reason string) (Order, error) {
+	if !s.LegacyOrderWritesEnabled() {
+		return Order{}, NewError(CodeConflict, "订单已切换至 Order Service", nil)
+	}
 	if strings.TrimSpace(reason) == "" {
 		reason = "用户取消"
 	}
@@ -287,6 +318,9 @@ func (s *Service) CancelOrder(ctx context.Context, userID uint64, orderID, reaso
 }
 
 func (s *Service) ExpireOrders(ctx context.Context, limit int) (int, error) {
+	if !s.LegacyOrderWritesEnabled() {
+		return 0, nil
+	}
 	if limit <= 0 || limit > 1000 {
 		limit = 100
 	}
@@ -311,6 +345,23 @@ func (s *Service) CompleteMockPayment(ctx context.Context, paymentNo, callbackRe
 	if paymentNo == "" || callbackRef == "" || !hmac.Equal([]byte(signature), []byte(s.signPayment(paymentNo))) {
 		return Order{}, NewError(CodeUnauthorized, "Mock 支付回调签名无效", nil)
 	}
+	if s.orderMode == OrderWriteModeOrderService {
+		paymentRepository, ok := s.repository.(PaymentTransitionRepository)
+		if !ok {
+			return Order{}, NewError(CodeUnavailable, "支付过渡 Repository 不支持新订单链路", nil)
+		}
+		payment, err := paymentRepository.GetPayment(ctx, paymentNo)
+		if err != nil {
+			return Order{}, err
+		}
+		if _, err := s.orderClient.ConfirmPayment(ctx, payment.UserID, payment.OrderID, paymentNo, callbackRef); err != nil {
+			return Order{}, err
+		}
+		if _, err := paymentRepository.MarkPaymentSucceeded(ctx, paymentNo, callbackRef, s.now().UTC()); err != nil {
+			return Order{}, err
+		}
+		return s.repository.GetOrder(ctx, payment.UserID, payment.OrderID)
+	}
 	return s.repository.CompletePayment(ctx, paymentNo, callbackRef, s.now().UTC())
 }
 
@@ -320,10 +371,32 @@ func (s *Service) ShipOrder(ctx context.Context, actorID uint64, orderID, carrie
 	if carrier == "" || trackingNo == "" || len(carrier) > 64 || len(trackingNo) > 128 {
 		return Order{}, NewError(CodeValidation, "物流公司和运单号无效", nil)
 	}
+	if s.orderMode == OrderWriteModeOrderService {
+		if _, err := s.orderClient.Ship(ctx, actorID, strings.TrimSpace(orderID), carrier, trackingNo); err != nil {
+			return Order{}, err
+		}
+		if recorder, ok := s.repository.(FulfillmentTransitionRepository); ok {
+			if _, err := recorder.RecordShipment(ctx, strings.TrimSpace(orderID), carrier, trackingNo, s.now().UTC()); err != nil {
+				return Order{}, err
+			}
+		}
+		return s.repository.GetOrder(ctx, 0, strings.TrimSpace(orderID))
+	}
 	return s.repository.ShipOrder(ctx, strings.TrimSpace(orderID), carrier, trackingNo, actorID, s.now().UTC())
 }
 
 func (s *Service) ConfirmOrder(ctx context.Context, userID uint64, orderID string) (Order, error) {
+	if s.orderMode == OrderWriteModeOrderService {
+		if _, err := s.orderClient.ConfirmReceipt(ctx, userID, strings.TrimSpace(orderID)); err != nil {
+			return Order{}, err
+		}
+		if recorder, ok := s.repository.(FulfillmentTransitionRepository); ok {
+			if _, err := recorder.MarkShipmentReceived(ctx, strings.TrimSpace(orderID), s.now().UTC()); err != nil {
+				return Order{}, err
+			}
+		}
+		return s.repository.GetOrder(ctx, userID, strings.TrimSpace(orderID))
+	}
 	return s.repository.ConfirmOrder(ctx, userID, strings.TrimSpace(orderID), s.now().UTC())
 }
 
@@ -335,6 +408,21 @@ func (s *Service) RefundOrder(ctx context.Context, userID uint64, orderID, reaso
 	refundNo, err := s.newID("ref")
 	if err != nil {
 		return Refund{}, Order{}, err
+	}
+	if s.orderMode == OrderWriteModeOrderService {
+		if _, err := s.orderClient.Refund(ctx, userID, strings.TrimSpace(orderID), refundNo, reason); err != nil {
+			return Refund{}, Order{}, err
+		}
+		var refund Refund
+		if recorder, ok := s.repository.(FulfillmentTransitionRepository); ok {
+			refund, err = recorder.RecordRefund(ctx, userID, strings.TrimSpace(orderID), refundNo, reason, s.now().UTC())
+			if err != nil {
+				// Order Service 已完成状态转换；重试本接口会幂等确认订单并补写过渡退款记录。
+				return Refund{}, Order{}, err
+			}
+		}
+		value, err := s.repository.GetOrder(ctx, userID, strings.TrimSpace(orderID))
+		return refund, value, err
 	}
 	return s.repository.RefundOrder(ctx, userID, strings.TrimSpace(orderID), refundNo, reason, s.now().UTC())
 }

@@ -103,6 +103,36 @@ func (s *MemoryStore) Release(_ context.Context, reservationID, orderID string) 
 	}
 }
 
+// Restock 将已确认的库存 reservation 以幂等方式恢复到可用库存。
+// 它与 Release 分离，避免支付前取消误恢复已确认库存。
+func (s *MemoryStore) Restock(_ context.Context, reservationID, orderID string) (Reservation, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	reservation, err := s.findReservation(reservationID, orderID)
+	if err != nil {
+		return Reservation{}, err
+	}
+	switch reservation.Status {
+	case ReservationRestocked:
+		return reservation, nil
+	case ReservationConfirmed:
+		s.stock[reservation.SKUID] += reservation.Quantity
+		if reservation.Mode == "seckill" {
+			purchaseKey := fmt.Sprintf("%d:%d:%d", reservation.ActivityID, reservation.UserID, reservation.SKUID)
+			s.purchased[purchaseKey] -= reservation.Quantity
+			if s.purchased[purchaseKey] <= 0 {
+				delete(s.purchased, purchaseKey)
+			}
+		}
+		reservation.Status = ReservationRestocked
+		reservation.UpdatedAt = s.now()
+		s.reservations[reservationID] = reservation
+		return reservation, nil
+	default:
+		return Reservation{}, ErrConflict
+	}
+}
+
 func (s *MemoryStore) AdmitSeckill(_ context.Context, command SeckillAdmissionCommand) (Reservation, error) {
 	if !validOpaqueID(command.RequestID) || command.ActivityID == 0 || command.UserID == 0 || command.SKUID == 0 || command.Quantity <= 0 {
 		return Reservation{}, ErrInvalidRequest
@@ -111,7 +141,7 @@ func (s *MemoryStore) AdmitSeckill(_ context.Context, command SeckillAdmissionCo
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if existing, ok := s.reservations[reservationID]; ok {
-		if existing.ActivityID != command.ActivityID || existing.UserID != command.UserID || existing.SKUID != command.SKUID || existing.Quantity != command.Quantity {
+		if existing.ActivityID != command.ActivityID || existing.UserID != command.UserID || existing.SKUID != command.SKUID || existing.Quantity != command.Quantity || (command.OrderID != "" && existing.OrderID != command.OrderID) {
 			return Reservation{}, ErrConflict
 		}
 		return existing, nil
@@ -124,7 +154,7 @@ func (s *MemoryStore) AdmitSeckill(_ context.Context, command SeckillAdmissionCo
 		return Reservation{}, ErrOutOfStock
 	}
 	now := s.now()
-	reservation := Reservation{ReservationID: reservationID, OrderID: "", UserID: command.UserID, ActivityID: command.ActivityID, SKUID: command.SKUID, Quantity: command.Quantity, Status: ReservationReserved, Mode: "seckill", CreatedAt: now, UpdatedAt: now}
+	reservation := Reservation{ReservationID: reservationID, OrderID: command.OrderID, UserID: command.UserID, ActivityID: command.ActivityID, SKUID: command.SKUID, Quantity: command.Quantity, Status: ReservationReserved, Mode: "seckill", CreatedAt: now, UpdatedAt: now}
 	s.stock[command.SKUID] -= command.Quantity
 	s.purchased[purchaseKey] += command.Quantity
 	s.reservations[reservationID] = reservation

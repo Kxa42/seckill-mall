@@ -7,7 +7,7 @@
 - **交付:** Docker Compose、版本化 SQL migration、OpenAPI 3.0。
 
 ## 架构与兼容约定
-- 新商城当前由 `cmd/commerce-api` 与已拆出的 Catalog、Inventory/Seckill 协同过渡承载，目标继续拆分 Identity、Cart、Order、Payment、Fulfillment；跨服务稳定契约位于 `common/contracts` 和 `proto/commerce`。
+- 新商城当前由 Gateway、Order、Catalog、Inventory/Seckill 和 Identity Snapshot 协同承载；Order Service 是普通/秒杀订单唯一写入者，Commerce API 只保留身份/购物车及支付、物流、退款过渡能力。Cart、Payment、Fulfillment 的完整独立服务仍按后续阶段拆分；跨服务稳定契约位于 `common/contracts` 和 `proto/commerce`。
 - 旧秒杀服务继续保留兼容接口；其 `product`、`orders`、`outbox_events` 与新商城表相互隔离。
 - 新客户端只使用 `/api/v1`；旧 `/login` 仅在 Gateway `debug` 模式注册。
 - 每个领域只写自己拥有的表；跨领域功能优先使用 API 或版本化事件。
@@ -15,7 +15,7 @@
 - 服务边界与数据所有权以 `common/contracts` 为契约基线；每个业务服务只能写入自己的数据集。
 - 目标商城服务的地址、独立 DSN、RabbitMQ 和 etcd 配置约定见 `config/commerce-services.example.yaml`；设置 `SECKILL_SERVICES_CONFIG` 后由按角色配置加载器消费，模板不包含真实密钥。
 - 事件信封的 `EventType` 与 `EventVersion` 独立演进；事件发布统一使用 `common/contracts.NewEventEnvelope`，消费者自行处理未知未来版本。
-- Catalog/Inventory 可分别通过 `go run ./cmd/catalog-service`、`go run ./cmd/inventory-service` 启动；Gateway 对 Catalog 商品查询设置 2 秒 gRPC deadline，未切换路由继续使用 NoRoute 过渡代理。
+- Catalog/Inventory/Identity Snapshot/Order 可分别通过 `go run ./cmd/catalog-service`、`go run ./cmd/inventory-service`、`go run ./cmd/identity-snapshot-service`、`go run ./cmd/order-service` 启动；Gateway 对 Order 和 Catalog gRPC 调用设置 deadline，未切换路由继续使用 NoRoute 过渡代理。Order/Commerce 的切流由 `SECKILL_COMMERCE_ORDER_MODE` 控制，但两个写入者不能同时启用。
 
 ## 开发约定
 - **代码规范:** Go 代码必须通过 `gofmt`、`go test ./...`、`go vet ./...` 和 `git diff --check`。
@@ -34,5 +34,7 @@
 ## 测试与流程
 - **单元测试:** 覆盖状态机、整数金额、库存预占、Token 轮换、幂等和权限边界。
 - **内存 E2E:** `bash tests/e2e_memory.sh`，无需 Docker，覆盖注册到确认收货主链路。
+- **Order Memory E2E:** `bash tests/order_service_memory_e2e.sh`，通过 gRPC/bufconn 验证普通/秒杀订单、幂等、查询、取消、退款恢复和权限边界。
 - **集成测试:** 有可用 Docker/MySQL 时执行 migration 重放、MySQL Repository、Compose 健康检查和旧 MQ 补偿链路。
+- **环境限制:** Docker daemon 不可用时跳过真实 MySQL/Redis/etcd/RabbitMQ/Compose 联调；Memory/Fake/bufconn 结果不能等同于真实基础设施验收。
 - **提交:** 建议使用 Conventional Commits。

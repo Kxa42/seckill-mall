@@ -29,13 +29,13 @@
 | GET/POST | `/cart/items` | 用户 | 列表或设置购物车商品 |
 | PUT/DELETE | `/cart/items/:sku_id` | 用户 | 修改或删除购物车商品 |
 | GET | `/cart/checkout-preview` | 用户 | 重新计算实时价格与可售库存 |
-| POST | `/orders` | 用户 | 使用 `Idempotency-Key` 从购物车创建订单 |
-| POST | `/seckill/orders` | 用户 | 创建进入统一状态机的秒杀订单 |
+| POST | `/orders` | 用户 | Gateway 调用 Order Service，使用 `Idempotency-Key` 从购物车创建普通订单 |
+| POST | `/seckill/orders` | 用户 | Gateway 调用 Order Service，通过一次 `AdmitSeckill` 创建秒杀订单 |
 | GET | `/orders` | 用户 | 分页查询自己的订单 |
 | GET | `/orders/:order_id` | 用户 | 查询订单、状态历史、支付和物流 |
 | POST | `/orders/:order_id/cancel` | 用户 | 取消待支付订单并释放库存 |
 | POST | `/orders/:order_id/confirm` | 用户 | 确认已发货订单收货 |
-| POST | `/orders/:order_id/refunds` | 用户 | 对已支付未发货订单执行 Mock 退款 |
+| POST | `/orders/:order_id/refunds` | 用户 | 对已支付或已发货订单执行 Mock 退款；Order 先恢复 confirmed reservation，再完成退款状态 |
 | POST | `/payments/mock` | 用户 | 创建 Mock 支付单与测试签名 |
 | POST | `/payments/mock/callback` | 签名 | 幂等完成支付并确认库存 |
 | POST | `/admin/products` | admin | 创建或更新分类、SPU、SKU 和可用库存 |
@@ -68,5 +68,11 @@
 | 服务 | 方法 | 当前运行时调用方 | 说明 |
 |------|------|------------------|------|
 | Catalog | `ListProducts` / `GetProduct` / `GetSKUSnapshot` | Gateway、后续 Order | 目录查询和 SKU 快照；默认过滤非 active 数据 |
-| Inventory | `Reserve` / `Confirm` / `Release` | 后续 Order | reservation 状态机，本阶段已独立实现但尚未接管 HTTP 秒杀订单 |
-| Inventory | `AdmitSeckill` | 后续 Order | Redis Lua/Memory 秒杀准入，按活动+用户+SKU 限购 |
+| Inventory | `Reserve` / `Confirm` / `Release` / `Restock` | Order Service | 分别处理普通预占、支付确认、支付前释放和退款后恢复；Restock 不修改 Release 的状态语义 |
+| Inventory | `AdmitSeckill` | Order Service | Redis Lua/Memory 秒杀准入，携带 Order ID，按活动+用户+SKU 限购且每个订单只调用一次 |
+
+## Order Service gRPC
+
+`CommerceOrderService` 提供 `Create`、`Get`、`List`、`Cancel`、`Expire`、`ConfirmPayment`、`Ship`、`ConfirmReceipt` 和 `Refund`。除本地 worker 外，所有调用都要求内部 HMAC metadata；`Expire` 额外要求 `system` 角色签名。
+
+Order Service 只写订单表和 Order 自有操作表。Catalog、Identity Snapshot、Inventory 通过 gRPC 提供 SKU 快照、地址快照和库存命令，失败时返回稳定 gRPC status 并由 Order 操作记录有限重试。

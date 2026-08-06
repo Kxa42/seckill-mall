@@ -48,6 +48,7 @@ const (
 	CodeForbidden         = "FORBIDDEN"
 	CodeOutOfStock        = "OUT_OF_STOCK"
 	CodeInvalidTransition = "INVALID_TRANSITION"
+	CodeUnavailable       = "UPSTREAM_UNAVAILABLE"
 	CodeInternal          = "INTERNAL_ERROR"
 )
 
@@ -243,6 +244,7 @@ type Payment struct {
 	ID          uint64     `json:"id"`
 	PaymentNo   string     `json:"payment_no"`
 	OrderID     string     `json:"order_id"`
+	UserID      uint64     `json:"-"`
 	AmountCents int64      `json:"amount_cents"`
 	Provider    string     `json:"provider"`
 	Status      string     `json:"status"`

@@ -437,6 +437,8 @@ func respondError(c *gin.Context, err error) {
 		status = http.StatusNotFound
 	case commerce.CodeConflict, commerce.CodeOutOfStock, commerce.CodeInvalidTransition:
 		status = http.StatusConflict
+	case commerce.CodeUnavailable:
+		status = http.StatusBadGateway
 	}
 	httpx.Error(c, status, commerce.ErrorCode(err), commerce.PublicMessage(err))
 }

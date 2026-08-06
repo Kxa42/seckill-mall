@@ -4,8 +4,8 @@
 为新商城 API 和旧秒杀兼容 API 提供统一 HTTP 入口。
 
 ## 模块概述
-- **职责:** Catalog 商品查询 gRPC 适配、未切换 `/api/v1` 的过渡代理、旧 gRPC 协议转换、JWT、Sentinel 限流、追踪和健康检查。
-- **状态:** ✅稳定
+- **职责:** Catalog 商品查询和 Order 订单路由 gRPC 适配、未切换 `/api/v1` 的过渡代理、旧 gRPC 协议转换、JWT、Sentinel 限流、追踪和健康检查。
+- **状态:** 🚧第 3 阶段切流中
 - **最后更新:** 2026-08-06
 
 ## 规范
@@ -32,9 +32,18 @@
 - Gateway 将 Catalog 商品模型转换为既有 `spu/skus/images` JSON 形状，并为下游调用设置 2 秒 deadline。
 - 其余未显式注册的 `/api/v1` 路由通过 `NoRoute` 代理到 Commerce，避免通配路由覆盖 Catalog。
 
+### 需求: Order 路由切换
+**模块:** API Gateway、Order Service
+
+#### 场景: 普通/秒杀订单统一编排
+- `POST /api/v1/orders`、`POST /api/v1/seckill/orders`、订单查询和取消显式调用 Order gRPC。
+- Gateway 不预先调用 Inventory，不把同一秒杀请求拆成两次扣减。
+- Order Service 不可用时返回 `UPSTREAM_UNAVAILABLE`，不得静默回退为 Commerce 写订单。
+
 ## API 接口
 - `GET /api/v1/products`: Catalog gRPC 商品分页查询。
 - `GET /api/v1/products/:id`: Catalog gRPC 商品详情查询。
+- `POST/GET /api/v1/orders*`、`POST /api/v1/seckill/orders`: Order gRPC。
 - 其他未切换的 `/api/v1/*`: 通过 NoRoute 代理 Commerce API。
 - `GET /healthz`: Gateway 存活检查。
 - 旧路径详见 `wiki/api.md`。

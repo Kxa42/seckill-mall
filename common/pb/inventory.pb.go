@@ -224,6 +224,7 @@ type InventorySeckillAdmitRequest struct {
 	UserId        uint64                 `protobuf:"varint,3,opt,name=user_id,json=userId,proto3" json:"user_id,omitempty"`
 	SkuId         uint64                 `protobuf:"varint,4,opt,name=sku_id,json=skuId,proto3" json:"sku_id,omitempty"`
 	Quantity      int32                  `protobuf:"varint,5,opt,name=quantity,proto3" json:"quantity,omitempty"`
+	OrderId       string                 `protobuf:"bytes,6,opt,name=order_id,json=orderId,proto3" json:"order_id,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -291,6 +292,13 @@ func (x *InventorySeckillAdmitRequest) GetQuantity() int32 {
 		return x.Quantity
 	}
 	return 0
+}
+
+func (x *InventorySeckillAdmitRequest) GetOrderId() string {
+	if x != nil {
+		return x.OrderId
+	}
+	return ""
 }
 
 type InventorySeckillAdmitResponse struct {
@@ -371,7 +379,7 @@ const file_proto_commerce_inventory_proto_rawDesc = "" +
 	"\amessage\x18\x03 \x01(\tR\amessage\"_\n" +
 	"\x1bInventoryReservationRequest\x12%\n" +
 	"\x0ereservation_id\x18\x01 \x01(\tR\rreservationId\x12\x19\n" +
-	"\border_id\x18\x02 \x01(\tR\aorderId\"\xaa\x01\n" +
+	"\border_id\x18\x02 \x01(\tR\aorderId\"\xc5\x01\n" +
 	"\x1cInventorySeckillAdmitRequest\x12\x1d\n" +
 	"\n" +
 	"request_id\x18\x01 \x01(\tR\trequestId\x12\x1f\n" +
@@ -379,15 +387,17 @@ const file_proto_commerce_inventory_proto_rawDesc = "" +
 	"activityId\x12\x17\n" +
 	"\auser_id\x18\x03 \x01(\x04R\x06userId\x12\x15\n" +
 	"\x06sku_id\x18\x04 \x01(\x04R\x05skuId\x12\x1a\n" +
-	"\bquantity\x18\x05 \x01(\x05R\bquantity\"t\n" +
+	"\bquantity\x18\x05 \x01(\x05R\bquantity\x12\x19\n" +
+	"\border_id\x18\x06 \x01(\tR\aorderId\"t\n" +
 	"\x1dInventorySeckillAdmitResponse\x12!\n" +
 	"\fadmission_id\x18\x01 \x01(\tR\vadmissionId\x12\x16\n" +
 	"\x06status\x18\x02 \x01(\tR\x06status\x12\x18\n" +
-	"\amessage\x18\x03 \x01(\tR\amessage2\xe5\x03\n" +
+	"\amessage\x18\x03 \x01(\tR\amessage2\xd9\x04\n" +
 	"\x10InventoryService\x12n\n" +
 	"\aReserve\x12..commerce.inventory.v1.InventoryReserveRequest\x1a3.commerce.inventory.v1.InventoryReservationResponse\x12r\n" +
 	"\aConfirm\x122.commerce.inventory.v1.InventoryReservationRequest\x1a3.commerce.inventory.v1.InventoryReservationResponse\x12r\n" +
-	"\aRelease\x122.commerce.inventory.v1.InventoryReservationRequest\x1a3.commerce.inventory.v1.InventoryReservationResponse\x12y\n" +
+	"\aRelease\x122.commerce.inventory.v1.InventoryReservationRequest\x1a3.commerce.inventory.v1.InventoryReservationResponse\x12r\n" +
+	"\aRestock\x122.commerce.inventory.v1.InventoryReservationRequest\x1a3.commerce.inventory.v1.InventoryReservationResponse\x12y\n" +
 	"\fAdmitSeckill\x123.commerce.inventory.v1.InventorySeckillAdmitRequest\x1a4.commerce.inventory.v1.InventorySeckillAdmitResponseB\x1bZ\x19seckill-mall/common/pb;pbb\x06proto3"
 
 var (
@@ -414,13 +424,15 @@ var file_proto_commerce_inventory_proto_depIdxs = []int32{
 	0, // 0: commerce.inventory.v1.InventoryService.Reserve:input_type -> commerce.inventory.v1.InventoryReserveRequest
 	2, // 1: commerce.inventory.v1.InventoryService.Confirm:input_type -> commerce.inventory.v1.InventoryReservationRequest
 	2, // 2: commerce.inventory.v1.InventoryService.Release:input_type -> commerce.inventory.v1.InventoryReservationRequest
-	3, // 3: commerce.inventory.v1.InventoryService.AdmitSeckill:input_type -> commerce.inventory.v1.InventorySeckillAdmitRequest
-	1, // 4: commerce.inventory.v1.InventoryService.Reserve:output_type -> commerce.inventory.v1.InventoryReservationResponse
-	1, // 5: commerce.inventory.v1.InventoryService.Confirm:output_type -> commerce.inventory.v1.InventoryReservationResponse
-	1, // 6: commerce.inventory.v1.InventoryService.Release:output_type -> commerce.inventory.v1.InventoryReservationResponse
-	4, // 7: commerce.inventory.v1.InventoryService.AdmitSeckill:output_type -> commerce.inventory.v1.InventorySeckillAdmitResponse
-	4, // [4:8] is the sub-list for method output_type
-	0, // [0:4] is the sub-list for method input_type
+	2, // 3: commerce.inventory.v1.InventoryService.Restock:input_type -> commerce.inventory.v1.InventoryReservationRequest
+	3, // 4: commerce.inventory.v1.InventoryService.AdmitSeckill:input_type -> commerce.inventory.v1.InventorySeckillAdmitRequest
+	1, // 5: commerce.inventory.v1.InventoryService.Reserve:output_type -> commerce.inventory.v1.InventoryReservationResponse
+	1, // 6: commerce.inventory.v1.InventoryService.Confirm:output_type -> commerce.inventory.v1.InventoryReservationResponse
+	1, // 7: commerce.inventory.v1.InventoryService.Release:output_type -> commerce.inventory.v1.InventoryReservationResponse
+	1, // 8: commerce.inventory.v1.InventoryService.Restock:output_type -> commerce.inventory.v1.InventoryReservationResponse
+	4, // 9: commerce.inventory.v1.InventoryService.AdmitSeckill:output_type -> commerce.inventory.v1.InventorySeckillAdmitResponse
+	5, // [5:10] is the sub-list for method output_type
+	0, // [0:5] is the sub-list for method input_type
 	0, // [0:0] is the sub-list for extension type_name
 	0, // [0:0] is the sub-list for extension extendee
 	0, // [0:0] is the sub-list for field type_name

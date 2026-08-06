@@ -1,7 +1,7 @@
 server:
   name: "order-service"
-  port: "50052"
-  metrics_port: "9092"
+  port: "51005"
+  metrics_port: ""
   mode: "debug"
 
 mysql:
@@ -24,5 +24,19 @@ seckill:
 jwt:
   expire: "5s"
 
-grpc_client:
-  product_service: "localhost:50051"
+order:
+  service_name: "order-service"
+  address: "127.0.0.1:51005"
+  mysql_dsn: ""
+
+catalog:
+  service_name: "catalog-service"
+  address: "127.0.0.1:51002"
+
+identity:
+  service_name: "identity-service"
+  address: "127.0.0.1:51001"
+
+inventory:
+  service_name: "inventory-service"
+  address: "127.0.0.1:51003"

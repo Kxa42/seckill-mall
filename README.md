@@ -4,18 +4,20 @@
 
 当前项目采用单仓库多服务模式：
 
-- Commerce API：完整商城后端 MVP，提供真实用户认证、地址、商品目录、购物车、统一订单、Mock 支付、履约和退款 API。
-- API Gateway：HTTP 入口，负责 Catalog 商品查询 gRPC、未迁移 `/api/v1` 代理、旧接口 JWT/Sentinel 兼容和请求追踪。
+- Commerce API：身份、地址、购物车、结算以及支付/物流/退款过渡 API；`order_service` 模式下不再写新订单。
+- API Gateway：HTTP 入口，负责 Catalog 商品查询 gRPC、Order 订单 gRPC、未迁移 `/api/v1` 代理、旧接口 JWT/Sentinel 兼容和请求追踪。
 - Catalog Service：独立商品目录、SPU/SKU 快照和商品查询 gRPC；支持 MySQL/内存 Repository。
-- Inventory/Seckill Service：独立 reservation 状态机、Redis Lua 秒杀准入和内存 Fake；本阶段尚未接管 HTTP 秒杀订单。
+- Inventory/Seckill Service：独立 reservation 状态机、Redis Lua 秒杀准入/退款恢复和内存 Fake；由 Order Service 唯一编排新订单库存动作。
+- Order Service：新商城普通/秒杀订单唯一编排者，负责快照、状态机、创建意图恢复和补偿重试。
+- Identity Snapshot Service：为 Order 提供地址归属校验和地址快照 gRPC；完整身份写接口仍由 Commerce 过渡承载。
 - Product Service：旧兼容链路的商品查询、Redis Lua 原子扣库存、限购记录、库存回滚。
-- Order Service：下单编排，调用商品服务扣库存，并同事务写入排队中订单和 Outbox 事件。
+- Legacy Order Service：旧秒杀下单编排、排队订单和旧 Outbox 事件，仅服务旧兼容 API。
 - Outbox Worker：扫描待投递事件，可靠发布 RabbitMQ，并处理重试和最终补偿。
 - MQ Consumer：消费订单消息，使用 MySQL 事务推进订单状态并同步扣减 `product.stock`。
 - DLQ Consumer：消费死信队列，按订单状态补偿 Redis 库存和用户购买记录，并标记失败订单。
 - Common：公共配置、跨服务边界/事件契约、JWT 工具、链路追踪、protobuf 生成代码。
 
-当前正在执行商城微服务渐进式迁移：第一阶段已建立 `common/contracts` 事件契约和 `proto/commerce` 内部 gRPC 契约；第二阶段已切换 Catalog 查询并建立独立 Inventory/Seckill，`commerce-api` 尚未移除，后续将按 Order、Identity/Cart、Payment/Fulfillment 分阶段切换。
+当前正在执行商城微服务渐进式迁移：第一阶段已建立 `common/contracts` 事件契约和 `proto/commerce` 内部 gRPC 契约；第二阶段已拆分 Catalog 与 Inventory；第三阶段已将 `/api/v1/orders*` 和 `/api/v1/seckill/orders` 切换到唯一 Order Service，Commerce 只作为过渡适配层保留，后续继续拆分 Cart、Payment 和 Fulfillment。
 
 商城前端当前明确暂缓，所有新增业务能力通过 `/api/v1` JSON API 和 OpenAPI 契约交付。
 
@@ -26,11 +28,12 @@
 - 新增 `/api/v1` 商城后端闭环：邮箱注册登录、Refresh Token 轮换、地址归属校验、SPU/SKU、购物车、结算预览和订单查询。
 - 新增整数分金额模型、库存预占/确认/释放、幂等下单、待支付超时关闭和订单状态历史。
 - 新增 Mock 支付签名回调、支付幂等、运营发货、用户确认收货和未发货订单退款。
-- 新增统一秒杀订单入口 `POST /api/v1/seckill/orders`，进入与普通订单一致的待支付和履约状态机。
+- 新增统一秒杀订单入口 `POST /api/v1/seckill/orders`，通过 Order Service 一次调用 Inventory `AdmitSeckill`，进入与普通订单一致的待支付和履约状态机。
 - 新增版本化 SQL migration、完整业务容器、健康检查、优雅停机和 OpenAPI 文档。
 - 新增商城微服务拆分的版本化 gRPC 契约和统一 RabbitMQ 事件信封基线。
-- Catalog/Inventory 已具备独立启动入口、gRPC 健康检查、可选 etcd 注册、Memory/Fake 验收和生产存储适配；Gateway 商品查询已通过 Catalog 服务发现切换。
-- `/api/v1/seckill/orders` 仍由 Commerce 过渡链路处理，未同时调用新 Inventory，避免双重扣减；完整秒杀订单编排留到 Order Service 阶段。
+- Catalog/Inventory/Identity Snapshot/Order 已具备独立启动入口、gRPC 边界、可选 etcd 注册或直连配置和 Memory/Fake 验收；Gateway 商品查询和新订单路由已切换到目标服务。
+- Order Service 通过 Catalog/Identity/Inventory gRPC 完成 SKU/地址快照、普通预占、秒杀准入、支付确认、取消、超时和退款库存恢复；Commerce 新模式不再直接写 `commerce_orders`。
+- 创建意图和库存操作支持有限退避恢复；RabbitMQ Outbox/Inbox 仍保留在项目中，作为旧链路和后续异步事件阶段能力，并未被移除。
 - 使用 Redis + Lua 原子扣减秒杀库存，避免并发下重复读写导致超卖。
 - 支持用户限购记录，防止同一用户超过配置数量购买。
 - 对非法购买数量做了多层校验，`count <= 0` 会在 Gateway、Order Service、Product Service 被拒绝。
@@ -57,13 +60,16 @@
 
 ```text
 cmd/
-  commerce-api/    完整商城 HTTP API 与超时关单任务
-  catalog-service/ 独立 Catalog gRPC 服务
-  inventory-service/ 独立 Inventory/Seckill gRPC 服务
-  migrate/         版本化数据库迁移命令
+  commerce-api/              身份/购物车/支付/履约过渡 HTTP API
+  catalog-service/           独立 Catalog gRPC 服务
+  inventory-service/         独立 Inventory/Seckill gRPC 服务
+  identity-snapshot-service/ Identity 地址快照 gRPC 服务
+  order-service/             新商城唯一 Order 编排 gRPC 服务
+  migrate/                   版本化数据库迁移命令
 
 internal/
   commerce/        商城领域、应用服务、MySQL/内存 Repository
+  order/           Order 领域、创建意图、补偿和 gRPC 服务端
   commerce/httpapi 版本化 HTTP transport
   platform/        显式配置、认证、统一响应和 migration runner
 
@@ -81,6 +87,7 @@ api/
 
 migrations/
   001_commerce_mvp.sql  商城 MVP 数据基线
+  002_order_service.sql Order 创建意图、操作记录和 reservation 引用迁移
 
 catalog_service/
   model.go         Catalog 独立领域模型
@@ -92,6 +99,13 @@ inventory_service/
   memory_store.go  并发安全内存状态机
   redis_store.go   Redis Lua 状态机
   server.go        Inventory/Seckill gRPC 服务端
+
+identity_service/
+  repository.go    地址快照 Memory/MySQL 只读 Repository
+  server.go        IdentityService 地址快照 gRPC 服务端
+
+tests/
+  order_service_memory_e2e.sh  无 Docker 的 Order/gRPC 验收入口
 
 api_gateway/
   main.go          启动装配
@@ -108,7 +122,7 @@ product_service/
   infrastructure.go MySQL / Redis / etcd / 库存预热
   metrics.go       Prometheus 和 debug reset
 
-order_service/
+order_service/                 # Legacy Order Service，仅旧 /order 兼容
   main.go          启动装配
   service.go       CreateOrder / GetOrder
   outbox.go        同事务写 orders 和 outbox_events
@@ -141,103 +155,54 @@ deploy/
   prometheus.yml   Prometheus 抓取配置
 ```
 
-## 秒杀链路架构
+## 新商城订单链路架构
 
 ```text
 Client
   -> API Gateway (Gin + JWT + Sentinel + Prometheus + OpenTelemetry)
-  -> gRPC / etcd
-  -> Order Service
-  -> gRPC / etcd
-  -> Product Service (Redis + Lua)
-  -> Order Service
-  -> MySQL (orders: pending + outbox_events: pending)
-  -> Outbox Worker
-  -> RabbitMQ
-  -> MQ Consumer
-  -> MySQL (orders: success + product.stock)
+  -> Order Service (gRPC)
+  -> Catalog Service (SKU 快照)
+  -> Identity Snapshot Service (地址快照)
+  -> Inventory Service (Reserve 或 AdmitSeckill)
+  -> OrderDB (commerce_orders/order_items/status_history)
+  -> pending_payment
 
-失败消息:
-RabbitMQ dead_queue
-  -> DLQ Consumer
-  -> MySQL 查询订单状态
-  -> Redis 补偿库存和用户购买记录
-  -> MySQL (orders: failed)
+支付成功:
+Commerce Payment Transition
+  -> Order.ConfirmPayment
+  -> Inventory.Confirm
+  -> paid
+
+取消/超时:
+Order
+  -> Inventory.Release
+  -> canceled
+
+退款:
+Commerce Refund Transition
+  -> Order.Refund
+  -> Inventory.Restock (confirmed -> restocked)
+  -> refunded
 ```
 
-## 下单流程
+旧兼容链路仍保持独立：`/order` -> Legacy Order Service -> Product Service -> Redis Lua -> `orders/outbox_events` -> RabbitMQ -> MQ/DLQ Consumer。它不会写新商城 `commerce_orders`。
 
-1. 用户调用 `POST /login` 获取 JWT。
-2. 用户携带 `Bearer Token` 调用 `POST /order`。
-3. Gateway 执行 Sentinel 限流、JWT 鉴权和参数校验。
-4. Gateway 调用 `OrderService.CreateOrder`。
-5. Order Service 校验购买数量，并调用 `ProductService.DeductStock`。
-6. Product Service 使用 Redis Lua 原子判断库存、限购记录，并扣减 Redis 库存。
-7. Order Service 查询商品价格，生成订单号，并写入 `orders.status = 0` 的排队中订单。
-8. Order Service 在同一个 MySQL 事务中写入 `outbox_events.status = 0` 的待投递事件，事件中包含订单消息和 trace headers。
-9. Outbox Worker 扫描待投递事件，将订单消息投递到 RabbitMQ，消息中包含 `order_id`、`user_id`、`product_id`、`count` 和 `amount`。
-10. MQ Consumer 消费订单消息，校验消息格式和 `count`。
-11. MQ Consumer 开启 MySQL 事务，锁定排队中订单，扣减 `product.stock`，并把订单标记为成功。
-12. 事务成功则 Ack；失败则 Nack 且不重回队列，消息进入死信队列。
-13. DLQ Consumer 消费死信消息，若订单不是成功状态，则补偿 Redis 库存和用户购买记录，并把订单标记为失败。
+## 新商城下单流程
+
+1. 用户通过 Gateway 使用 JWT 调用 `POST /api/v1/orders` 或 `POST /api/v1/seckill/orders`。
+2. Gateway 校验用户、`Idempotency-Key` 和请求格式，通过 HMAC metadata 调用 Order Service。
+3. Order Service 保存 `(user_id, idempotency_key, request_digest)` 创建意图，生成确定性 Order ID。
+4. Order 调用 Catalog 获取价格/商品快照，调用 Identity 获取地址快照。
+5. Order 按 SKU ID 稳定排序调用 Inventory；秒杀订单只调用一次带 `order_id` 的 `AdmitSeckill`。
+6. 所有预占成功后，Order 本地事务保存订单、订单项、快照、状态历史和 reservation 引用。
+7. 重复请求返回同一订单；参数摘要冲突返回 `409 CONFLICT`，不会重复调用 Inventory。
+8. 下游失败时逆序释放已成功预占；释放/确认/恢复失败写入 `order_operations`，worker 按有限退避重试。
 
 ## 库存一致性设计
 
-当前库存采用两层模型：
+新链路的库存真源由 Inventory Service 持有：RedisStore 使用 Lua 保证库存、reservation 状态和秒杀限购原子转换，MemoryStore 与其保持同一状态机用于无 Docker 验收。Order 不直接写 `skus`、`inventory_reservations` 或 Identity 表。
 
-- Redis：高并发入口库存，负责快速扣减、限购判断和流量削峰。
-- MySQL：最终库存账本，`product.stock` 在订单最终落库时同步扣减。
-
-正常情况下：
-
-```text
-Redis 扣减成功
--> Order Service 同事务写入 Pending 订单和 Outbox Pending 事件
--> Outbox Worker 投递 MQ 成功
--> Outbox 事件更新为 Sent
--> Consumer 事务扣 MySQL product.stock
--> Consumer 事务更新订单为 Success
--> Ack
-```
-
-如果 Order Service 写入 Outbox 后立刻崩溃：
-
-```text
-Redis 已扣减
--> Pending 订单和 Outbox Pending 事件已写入
--> Outbox Worker 后台扫描 Pending 事件
--> Outbox Worker 投递 MQ
--> 投递成功后 Outbox 事件更新为 Sent
-```
-
-如果 Outbox Worker 达到最大重试仍无法投递：
-
-```text
-Redis 已扣减
--> Pending 订单和 Outbox Pending 事件已写入
--> Outbox Worker 多次投递失败
--> Redis 幂等补偿
--> Redis 库存恢复
--> Redis 用户购买记录恢复
--> 订单更新为 Failed
--> Outbox 事件更新为 Failed
-```
-
-当前 MQ 投递已由 Outbox Worker 完全接管。Order Service 不再直接连接 RabbitMQ，请求链路只负责 Redis 扣减和 MySQL 事务写入。只要 `orders` 和 `outbox_events` 提交成功，即使 Order Service 随后崩溃，Worker 也能继续投递未发送事件。
-
-如果 Consumer 落库失败：
-
-```text
-消息进入死信队列
--> DLQ Consumer 查询 MySQL 订单状态
--> 订单不是 Success 则补偿 Redis 库存和用户购买记录
--> Pending 订单更新为 Failed
--> 补偿成功后 Ack 死信消息
-```
-
-DLQ Consumer 的 Redis 补偿使用 `order:rollback:{order_id}` 作为回滚标记，避免同一条死信消息重复投递时多次增加 Redis 库存。
-
-Redis 重启或数据丢失后，Product Service 会从 MySQL 的 `product.stock` 预热库存。由于 Consumer 已同步扣减 MySQL 库存，相比早期版本，跨重启后重新预热导致超卖的风险已经明显降低。
+`Release` 只允许 `reserved -> released`，用于取消/超时；`Restock` 只允许 `confirmed -> restocked`，用于退款，并且两者都支持重复调用不重复增加库存。超过 8 次补偿重试的操作保持 `failed`，供告警和人工处理。
 
 ## 环境准备
 
@@ -249,7 +214,7 @@ Redis 重启或数据丢失后，Product Service 会从 MySQL 的 `product.stock
 docker compose up -d
 ```
 
-4. `migrate` 容器会先执行 `deploy/mysql/init.sql` 之后的版本化 migration；`commerce-api`、Product Service、Order Service 和 Gateway 会在 migration 成功后启动。
+4. `migrate` 容器会先执行 `deploy/mysql/init.sql` 之后的版本化 migration；Catalog、Inventory、Identity Snapshot、Order、Commerce 和 Gateway 会在 migration 成功后启动。
 5. 如需直接运行 Go 进程而不使用 Compose，设置必要环境变量：
 
 ```bash
@@ -266,8 +231,10 @@ go run ./cmd/migrate
 go run ./cmd/commerce-api
 go run ./cmd/catalog-service
 go run ./cmd/inventory-service
+go run ./cmd/identity-snapshot-service
+go run ./cmd/order-service
 go run ./product_service
-go run ./order_service
+go run ./order_service # Legacy，仅旧 /order
 go run ./outbox_worker
 go run ./mq_consumer
 go run ./dlq_consumer
@@ -280,7 +247,7 @@ go run ./api_gateway
 go run ./stress_test
 ```
 
-第二阶段的新服务默认使用 `config/catalog.yaml` 的内存 Repository 和 `config/inventory.yaml` 的 MemoryStore，不要求本机有 MySQL、Redis 或 Docker；配置 `SECKILL_CATALOG_MYSQL_DSN` 或将 `SECKILL_INVENTORY_STORE=redis` 后才会连接真实存储。Gateway 的真实服务发现仍需要 etcd。
+第三阶段的新服务默认可使用 `config/catalog.yaml`、`config/identity.yaml`、`config/order.yaml` 的内存 Repository 和 `config/inventory.yaml` 的 MemoryStore，不要求本机有 MySQL、Redis 或 Docker；配置各服务 DSN 或将 `SECKILL_INVENTORY_STORE=redis` 后才会连接真实存储。Gateway 的真实服务发现仍需要 etcd，测试可使用 direct address/bufconn。
 
 服务已经拆成多文件 package，启动时必须使用 `go run ./服务目录`。不要再使用 `go run product_service/main.go` 这类单文件命令，否则 Go 只会编译该文件，找不到同目录拆出去的函数和类型。
 
@@ -315,7 +282,7 @@ MySQL 容器第一次创建 `mysql_data` volume 时，会自动执行 `deploy/my
 - `outbox_events`：Outbox 可靠投递事件。
 - 测试商品：`id=1`，`stock=100`。
 
-随后 `cmd/migrate` 会执行 `migrations/001_commerce_mvp.sql`，创建新商城 Identity、Catalog、Cart、Order、Payment、Fulfillment、Outbox/Inbox 表。
+随后 `cmd/migrate` 会执行 `migrations/001_commerce_mvp.sql` 和 `migrations/002_order_service.sql`，创建新商城 Identity、Catalog、Cart、Order、Payment、Fulfillment、Outbox/Inbox 表以及 Order 创建意图、补偿操作和 reservation 引用。
 
 如果你修改了初始化 SQL，并且想在本地重新执行整套初始化，可以删除 MySQL volume 后重启：
 
@@ -465,6 +432,12 @@ go vet ./...
 bash tests/e2e_memory.sh
 ```
 
+Order Service 的 Memory/Fake/bufconn 验收：
+
+```bash
+bash tests/order_service_memory_e2e.sh
+```
+
 当前已有测试：
 
 - `internal/commerce/*_test.go`：覆盖完整交易闭环、取消退款、秒杀统一状态、金额溢出、库存预占保护和 Outbox 事件 ID。
@@ -474,6 +447,8 @@ bash tests/e2e_memory.sh
 - `api_gateway/catalog_routes_test.go`：通过 Catalog gRPC bufconn 验证商品路由和 JSON 适配。
 - `catalog_service/server_test.go`：通过 MemoryRepository/bufconn 验证目录分页、详情和参数错误。
 - `inventory_service/server_test.go`：验证预占状态机、重复命令、释放回滚限购、活动隔离和 gRPC Fake E2E。
+- `internal/order/*_test.go`：验证统一普通/秒杀创建、幂等摘要、快照、补偿释放/确认/退款恢复、创建意图恢复、生命周期、权限和 gRPC 错误映射。
+- `identity_service/*_test.go`：验证地址快照归属校验和 Identity gRPC 适配。
 - `outbox_worker/worker_test.go`：测试 Outbox 订单消息 payload 解析。
 - `outbox_worker/repository_test.go`：测试 Outbox 重试退避时间和最大延迟上限。
 
@@ -553,17 +528,17 @@ MQ 异步链路会通过 RabbitMQ headers 传递 OpenTelemetry trace context。O
 
 - `mq_consumer` 对旧格式 MQ 消息不兼容。旧消息没有 `count` 字段，会被识别为非法消息并进入死信队列。
 - `dlq_consumer` 对旧格式或字段缺失的死信消息无法自动补偿，会记录日志并确认消息，避免毒丸消息阻塞队列。
-- Order Service 会写入排队中订单，已有旧表需要先执行 `orders` 表字段升级 SQL，否则会因为缺少 `count`、`fail_reason` 或 `updated_at` 导致写入失败。
+- Legacy Order Service 会写入旧排队中订单，已有旧表需要先执行 `orders` 表字段升级 SQL；该链路与新 Order Service 的 `commerce_orders` 分离。
 - 服务已拆成多文件 package，本地启动请使用 `go run ./api_gateway`、`go run ./product_service` 这种目录形式。
-- Outbox Worker 已完全接管 MQ 投递，Order Service 不再直接依赖 RabbitMQ；启动服务时需要确保 `outbox_worker` 正常运行，否则订单会停留在 `status = 0` 排队中。
-- 上述 Worker 当前只处理旧 `outbox_events`；新商城 `commerce_outbox_events` 已持久化但尚未接入发布器。
+- Outbox Worker 仍接管旧兼容链路 MQ 投递；新 Order Service 使用同步 gRPC 和 `order_operations`，不把 RabbitMQ 作为创建订单的隐式依赖。
+- 上述 Worker 当前只处理旧 `outbox_events`；新商城 `commerce_outbox_events` 已持久化但尚未接入领域事件发布器，属于后续阶段能力。
 - Product Service 在 `debug` 模式下会启用 `/dev/reset`，该接口会清空 Redis 和 `orders` 表，但当前不会自动恢复 `product.stock` 到初始值。
 - DLQ Consumer 已支持常见落库失败后的 Redis 补偿，但对用户购买记录小于回滚数量等异常状态仍需要人工核查日志。
 - RabbitMQ 生产者侧已启用 publisher confirm、persistent message、mandatory return 和失败重连重试；Consumer 侧已支持连接断开后自动重连。
 - 当前已接入业务侧 MQ/Outbox 指标和 RabbitMQ broker 指标，但还没有内置 Grafana dashboard 与 Prometheus alert 规则。
 - etcd 注册地址可通过 `SECKILL_ADVERTISE_ADDR` 覆盖；Compose 已显式配置容器内服务地址。
-- `/api/v1/products*` 已由 Gateway 切换到 Catalog gRPC；`/api/v1/seckill/orders` 仍使用 Commerce MySQL reservation，尚未切换到新 Inventory/Seckill。
-- 新 Catalog/Inventory 入口已加入代码和配置，但当前 Compose 真实联调仍按环境可用性执行；本环境 Docker daemon 不可用时只执行内存/Fake、静态和竞态验收。
+- `/api/v1/products*`、`/api/v1/orders*` 和 `/api/v1/seckill/orders` 已由 Gateway 显式切换到 Catalog/Order gRPC；旧 `/order` 仍使用 Legacy Order/Product/Redis/MQ 链路。
+- 本环境 Docker daemon 不可用，已执行内存/Fake/bufconn、全仓测试、vet、全仓 race、脚本和 Compose 静态校验；未执行真实 migration 重放、Redis/etcd/RabbitMQ/Compose 启动和真实 gRPC E2E。
 - 商城前端明确暂缓；真实支付、活动运营 API 和 Commerce Outbox 消费者尚未实现。
 
 ## 继续优化方向
@@ -573,7 +548,7 @@ MQ 异步链路会通过 RabbitMQ headers 传递 OpenTelemetry trace context。O
 1. 增加 Grafana dashboard 和 Prometheus alert：展示 MQ publish、consume、DLQ 补偿、重连、队列积压，并配置失败率和积压告警。
 2. 增强 Outbox 告警和仪表盘：围绕待投递积压、发布失败率、重试次数、最终补偿失败和重连次数配置 Prometheus alert 与 Grafana dashboard。
 3. 修复开发重置能力：让 `/dev/reset` 同步恢复 `product.stock` 到测试初始库存，或改成显式传入重置库存。
-4. 进入 Order Service 阶段，将普通/秒杀订单统一编排到 Inventory reservation，完成 HTTP 秒杀切换和失败回滚。
+4. 继续拆分 Cart、Payment、Fulfillment，并在后续阶段把新商城 Outbox/Inbox 与 RabbitMQ 消费者接入目标领域事件。
 5. 为 `commerce_outbox_events` 增加发布 Worker 和 Inbox 幂等消费者，逐步替换旧跨表 MQ Consumer。
 6. 在可用 Docker 环境补充 MySQL migration 重放、并发库存、RabbitMQ/Redis 故障和完整 Compose 健康验收。
 7. 增加真实支付沙箱适配、支付结果查询和异步退款；继续保持支付凭证不落库。

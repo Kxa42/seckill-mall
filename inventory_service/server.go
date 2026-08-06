@@ -57,11 +57,22 @@ func (s *Server) Release(ctx context.Context, req *pb.InventoryReservationReques
 	return reservationResponse(reservation, "库存预占已释放"), nil
 }
 
+func (s *Server) Restock(ctx context.Context, req *pb.InventoryReservationRequest) (*pb.InventoryReservationResponse, error) {
+	if req == nil {
+		return nil, status.Error(codes.InvalidArgument, "请求不能为空")
+	}
+	reservation, err := s.store.Restock(ctx, req.ReservationId, req.OrderId)
+	if err != nil {
+		return nil, mapError(err)
+	}
+	return reservationResponse(reservation, "已退款并恢复库存"), nil
+}
+
 func (s *Server) AdmitSeckill(ctx context.Context, req *pb.InventorySeckillAdmitRequest) (*pb.InventorySeckillAdmitResponse, error) {
 	if req == nil {
 		return nil, status.Error(codes.InvalidArgument, "请求不能为空")
 	}
-	reservation, err := s.store.AdmitSeckill(ctx, SeckillAdmissionCommand{RequestID: req.RequestId, ActivityID: req.ActivityId, UserID: req.UserId, SKUID: req.SkuId, Quantity: req.Quantity})
+	reservation, err := s.store.AdmitSeckill(ctx, SeckillAdmissionCommand{RequestID: req.RequestId, ActivityID: req.ActivityId, UserID: req.UserId, SKUID: req.SkuId, Quantity: req.Quantity, OrderID: req.OrderId})
 	if err != nil {
 		return nil, mapError(err)
 	}

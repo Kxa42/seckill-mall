@@ -12,19 +12,22 @@
 
 ## 2. 阶段2：Catalog 与 Inventory/Seckill 服务
 
-- [ ] 2.1 从 `internal/commerce` 提取 Catalog Repository 和服务端，建立商品快照 gRPC。
-- [ ] 2.2 改造现有 Product Service，明确 Catalog 与 Inventory 数据所有权，保留 Redis Lua 秒杀能力。
-- [ ] 2.3 实现统一库存 `Reserve/Confirm/Release` gRPC，并增加普通库存并发测试。
-- [ ] 2.4 将 `/api/v1/products` 和 `/api/v1/seckill/orders` 切换到目标服务。
-- [ ] 2.5 阶段验收：商品查询、库存预占/释放、Redis Lua 限购、Gateway gRPC 调用和 Fake E2E。
+- [√] 2.1 从 `internal/commerce` 提取 Catalog Repository 和服务端，建立商品快照 gRPC。
+- [√] 2.2 改造现有 Product Service，明确 Catalog 与 Inventory 数据所有权，保留 Redis Lua 秒杀能力。
+- [√] 2.3 实现统一库存 `Reserve/Confirm/Release` gRPC，并增加普通库存并发测试。
+- [√] 2.4 将 `/api/v1/products` 和 `/api/v1/seckill/orders` 切换到目标服务。
+  > 备注: 商品接口在阶段 2 切换；秒杀订单接口在阶段 3 统一 Order Service 编排后切换，旧 `/order` 兼容链路仍保留。
+- [√] 2.5 阶段验收：商品查询、库存预占/释放、Redis Lua 限购、Gateway gRPC 调用和 Fake E2E。
+  > 备注: 已完成 Memory/Fake/bufconn 验收；Docker 不可用导致真实 Redis/MySQL/Compose 集成留待后续环境验收。
 
 ## 3. 阶段3：唯一 Order Service
 
-- [ ] 3.1 将 `commerce_orders`、订单项和状态历史迁移为 Order Service 所有表。
-- [ ] 3.2 改造现有 Order Service，使普通订单和秒杀订单共用新的订单状态机。
-- [ ] 3.3 增加 Catalog、Identity、Inventory gRPC 客户端和失败补偿。
-- [ ] 3.4 将 `/api/v1/orders`、查询、取消和超时任务切换到 Order Service。
-- [ ] 3.5 阶段验收：幂等创建、库存失败回滚、状态转换、权限边界和旧订单表不再被新链路写入。
+- [√] 3.1 将 `commerce_orders`、订单项和状态历史迁移为 Order Service 所有表。
+- [√] 3.2 改造现有 Order Service，使普通订单和秒杀订单共用新的订单状态机。
+- [√] 3.3 增加 Catalog、Identity、Inventory gRPC 客户端和失败补偿。
+- [√] 3.4 将 `/api/v1/orders`、查询、取消和超时任务切换到 Order Service。
+- [√] 3.5 阶段验收：幂等创建、库存失败回滚、状态转换、权限边界和旧订单表不再被新链路写入。
+  > 备注: 已完成全仓测试、race、vet 和 Order Memory/Fake/bufconn 验收；真实基础设施集成因 Docker daemon 不可用跳过。
 
 ## 4. 阶段4：Identity、Cart、Payment、Fulfillment 服务
 
@@ -48,7 +51,8 @@
 - [ ] 6.2 逐步下线旧 `/order`、旧 `orders/product` 跨表 MQ Consumer 和重复表写入。
 - [ ] 6.3 更新 Docker Compose、migration、OpenAPI、README 和知识库架构图。
 - [ ] 6.4 完成全部自动化测试、静态检查和可用 Docker 环境下的真实集成验收。
-- [ ] 6.5 记录 Docker 不可用时被跳过的项目和后续验收入口。
+- [√] 6.5 记录 Docker 不可用时被跳过的项目和后续验收入口。
+  > 备注: 当前已记录真实 migration、Redis/etcd/RabbitMQ、Compose 启动和真实 gRPC E2E 的跳过原因及替代验收入口。
 
 ## 7. 安全检查
 
@@ -57,10 +61,14 @@
 
 ## 8. 文档更新
 
-- [ ] 8.1 更新 `helloagents/wiki/arch.md`、`data.md`、`api.md` 和各模块文档。
-- [ ] 8.2 更新 `README.md`、`helloagents/project.md`、`helloagents/CHANGELOG.md` 和历史索引。
+- [√] 8.1 更新 `helloagents/wiki/arch.md`、`data.md`、`api.md` 和各模块文档。
+  > 备注: 已同步阶段 1 至阶段 3 的当前架构事实；后续服务拆分仍需增量更新。
+- [√] 8.2 更新 `README.md`、`helloagents/project.md`、`helloagents/CHANGELOG.md` 和历史索引。
+  > 备注: 已同步阶段 3 的启动方式、验收入口、迁移边界和 Docker 跳过项；最终收口阶段仍需继续维护。
 
 ## 9. 测试
 
 - [ ] 9.1 每个阶段运行 `go test ./...`、`go vet ./...`、必要范围的 `go test -race`。
+  > 备注: 阶段 1 至阶段 3 均已执行；阶段 4 以后需在各阶段继续执行。
 - [ ] 9.2 每个阶段运行 Fake/Memory E2E；Docker 可用时追加 MySQL、Redis、RabbitMQ 和 Compose 验收。
+  > 备注: 阶段 1 至阶段 3 已完成 Fake/Memory/bufconn 验收；真实基础设施和后续阶段验收待环境及实现就绪。

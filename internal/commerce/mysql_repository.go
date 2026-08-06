@@ -792,6 +792,119 @@ func (r *MySQLRepository) CreatePayment(ctx context.Context, userID uint64, orde
 	return result, err
 }
 
+func (r *MySQLRepository) GetPayment(ctx context.Context, paymentNo string) (Payment, error) {
+	var record paymentRecord
+	if err := r.db.WithContext(ctx).Where("payment_no = ?", paymentNo).First(&record).Error; err != nil {
+		return Payment{}, mapNotFound(err, "支付单不存在")
+	}
+	var order orderRecord
+	if err := r.db.WithContext(ctx).Select("user_id").Where("order_id = ?", record.OrderID).First(&order).Error; err != nil {
+		return Payment{}, mapNotFound(err, "订单不存在")
+	}
+	payment := paymentFromRecord(record)
+	payment.UserID = order.UserID
+	return payment, nil
+}
+
+func (r *MySQLRepository) MarkPaymentSucceeded(ctx context.Context, paymentNo, callbackRef string, now time.Time) (Payment, error) {
+	var result Payment
+	err := r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		var record paymentRecord
+		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("payment_no = ?", paymentNo).First(&record).Error; err != nil {
+			return mapNotFound(err, "支付单不存在")
+		}
+		if record.Status == PaymentStatusSucceeded {
+			if record.CallbackRef == nil || *record.CallbackRef != callbackRef {
+				return NewError(CodeConflict, "支付回调与已完成记录不一致", nil)
+			}
+			result = paymentFromRecord(record)
+			return nil
+		}
+		record.Status = PaymentStatusSucceeded
+		record.CallbackRef = &callbackRef
+		record.PaidAt = timePointer(now)
+		record.UpdatedAt = now
+		if err := tx.Save(&record).Error; err != nil {
+			if errors.Is(err, gorm.ErrDuplicatedKey) {
+				return NewError(CodeConflict, "支付回调流水已使用", err)
+			}
+			return err
+		}
+		result = paymentFromRecord(record)
+		return nil
+	})
+	return result, err
+}
+
+func (r *MySQLRepository) RecordShipment(ctx context.Context, orderID, carrier, trackingNo string, now time.Time) (Shipment, error) {
+	var result Shipment
+	err := r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		var order orderRecord
+		if err := tx.Select("order_id").Where("order_id = ?", orderID).First(&order).Error; err != nil {
+			return mapNotFound(err, "订单不存在")
+		}
+		var existing shipmentRecord
+		if err := tx.Where("order_id = ?", orderID).First(&existing).Error; err == nil {
+			if existing.Carrier != carrier || existing.TrackingNo != trackingNo {
+				return NewError(CodeConflict, "订单已有不同物流记录", nil)
+			}
+			result = shipmentFromRecord(existing)
+			return nil
+		} else if !errors.Is(err, gorm.ErrRecordNotFound) {
+			return err
+		}
+		record := shipmentRecord{OrderID: orderID, Carrier: carrier, TrackingNo: trackingNo, Status: ShipmentStatusShipped, ShippedAt: now, CreatedAt: now, UpdatedAt: now}
+		if err := tx.Create(&record).Error; err != nil {
+			return err
+		}
+		result = shipmentFromRecord(record)
+		return nil
+	})
+	return result, err
+}
+
+func (r *MySQLRepository) MarkShipmentReceived(ctx context.Context, orderID string, now time.Time) (Shipment, error) {
+	var record shipmentRecord
+	if err := r.db.WithContext(ctx).Where("order_id = ?", orderID).First(&record).Error; err != nil {
+		return Shipment{}, mapNotFound(err, "物流记录不存在")
+	}
+	if err := r.db.WithContext(ctx).Model(&record).Updates(map[string]any{"status": ShipmentStatusReceived, "delivered_at": now, "updated_at": now}).Error; err != nil {
+		return Shipment{}, err
+	}
+	record.Status = ShipmentStatusReceived
+	record.DeliveredAt = timePointer(now)
+	record.UpdatedAt = now
+	return shipmentFromRecord(record), nil
+}
+
+func (r *MySQLRepository) RecordRefund(ctx context.Context, userID uint64, orderID, refundNo, reason string, now time.Time) (Refund, error) {
+	var result Refund
+	err := r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		var order orderRecord
+		if err := tx.Where("order_id = ? AND user_id = ?", orderID, userID).First(&order).Error; err != nil {
+			return mapNotFound(err, "订单不存在")
+		}
+		var existing refundRecord
+		if err := tx.Where("order_id = ?", orderID).First(&existing).Error; err == nil {
+			result = refundFromRecord(existing)
+			return nil
+		} else if !errors.Is(err, gorm.ErrRecordNotFound) {
+			return err
+		}
+		var payment paymentRecord
+		if err := tx.Where("order_id = ? AND status = ?", orderID, PaymentStatusSucceeded).First(&payment).Error; err != nil {
+			return NewError(CodeInvalidTransition, "订单没有成功支付记录", err)
+		}
+		record := refundRecord{RefundNo: refundNo, OrderID: orderID, PaymentNo: payment.PaymentNo, AmountCents: order.TotalAmountCents, Reason: reason, Status: RefundStatusSucceeded, CreatedAt: now, CompletedAt: timePointer(now)}
+		if err := tx.Create(&record).Error; err != nil {
+			return err
+		}
+		result = refundFromRecord(record)
+		return nil
+	})
+	return result, err
+}
+
 func (r *MySQLRepository) CompletePayment(ctx context.Context, paymentNo, callbackRef string, now time.Time) (Order, error) {
 	var result Order
 	err := r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {

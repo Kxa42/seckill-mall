@@ -22,6 +22,7 @@ const (
 	InventoryService_Reserve_FullMethodName      = "/commerce.inventory.v1.InventoryService/Reserve"
 	InventoryService_Confirm_FullMethodName      = "/commerce.inventory.v1.InventoryService/Confirm"
 	InventoryService_Release_FullMethodName      = "/commerce.inventory.v1.InventoryService/Release"
+	InventoryService_Restock_FullMethodName      = "/commerce.inventory.v1.InventoryService/Restock"
 	InventoryService_AdmitSeckill_FullMethodName = "/commerce.inventory.v1.InventoryService/AdmitSeckill"
 )
 
@@ -32,6 +33,9 @@ type InventoryServiceClient interface {
 	Reserve(ctx context.Context, in *InventoryReserveRequest, opts ...grpc.CallOption) (*InventoryReservationResponse, error)
 	Confirm(ctx context.Context, in *InventoryReservationRequest, opts ...grpc.CallOption) (*InventoryReservationResponse, error)
 	Release(ctx context.Context, in *InventoryReservationRequest, opts ...grpc.CallOption) (*InventoryReservationResponse, error)
+	// Restock only reverses a confirmed reservation after a successful refund.
+	// It is intentionally separate from Release, which only handles pre-payment reservations.
+	Restock(ctx context.Context, in *InventoryReservationRequest, opts ...grpc.CallOption) (*InventoryReservationResponse, error)
 	AdmitSeckill(ctx context.Context, in *InventorySeckillAdmitRequest, opts ...grpc.CallOption) (*InventorySeckillAdmitResponse, error)
 }
 
@@ -73,6 +77,16 @@ func (c *inventoryServiceClient) Release(ctx context.Context, in *InventoryReser
 	return out, nil
 }
 
+func (c *inventoryServiceClient) Restock(ctx context.Context, in *InventoryReservationRequest, opts ...grpc.CallOption) (*InventoryReservationResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(InventoryReservationResponse)
+	err := c.cc.Invoke(ctx, InventoryService_Restock_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *inventoryServiceClient) AdmitSeckill(ctx context.Context, in *InventorySeckillAdmitRequest, opts ...grpc.CallOption) (*InventorySeckillAdmitResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(InventorySeckillAdmitResponse)
@@ -90,6 +104,9 @@ type InventoryServiceServer interface {
 	Reserve(context.Context, *InventoryReserveRequest) (*InventoryReservationResponse, error)
 	Confirm(context.Context, *InventoryReservationRequest) (*InventoryReservationResponse, error)
 	Release(context.Context, *InventoryReservationRequest) (*InventoryReservationResponse, error)
+	// Restock only reverses a confirmed reservation after a successful refund.
+	// It is intentionally separate from Release, which only handles pre-payment reservations.
+	Restock(context.Context, *InventoryReservationRequest) (*InventoryReservationResponse, error)
 	AdmitSeckill(context.Context, *InventorySeckillAdmitRequest) (*InventorySeckillAdmitResponse, error)
 	mustEmbedUnimplementedInventoryServiceServer()
 }
@@ -109,6 +126,9 @@ func (UnimplementedInventoryServiceServer) Confirm(context.Context, *InventoryRe
 }
 func (UnimplementedInventoryServiceServer) Release(context.Context, *InventoryReservationRequest) (*InventoryReservationResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method Release not implemented")
+}
+func (UnimplementedInventoryServiceServer) Restock(context.Context, *InventoryReservationRequest) (*InventoryReservationResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method Restock not implemented")
 }
 func (UnimplementedInventoryServiceServer) AdmitSeckill(context.Context, *InventorySeckillAdmitRequest) (*InventorySeckillAdmitResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method AdmitSeckill not implemented")
@@ -188,6 +208,24 @@ func _InventoryService_Release_Handler(srv interface{}, ctx context.Context, dec
 	return interceptor(ctx, in, info, handler)
 }
 
+func _InventoryService_Restock_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(InventoryReservationRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(InventoryServiceServer).Restock(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: InventoryService_Restock_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(InventoryServiceServer).Restock(ctx, req.(*InventoryReservationRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _InventoryService_AdmitSeckill_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(InventorySeckillAdmitRequest)
 	if err := dec(in); err != nil {
@@ -224,6 +262,10 @@ var InventoryService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "Release",
 			Handler:    _InventoryService_Release_Handler,
+		},
+		{
+			MethodName: "Restock",
+			Handler:    _InventoryService_Restock_Handler,
 		},
 		{
 			MethodName: "AdmitSeckill",

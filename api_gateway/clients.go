@@ -20,10 +20,11 @@ import (
 )
 
 type grpcClients struct {
-	product   pb.ProductServiceClient
-	order     pb.OrderServiceClient
-	catalog   pb.CatalogServiceClient
-	inventory pb.InventoryServiceClient
+	product       pb.ProductServiceClient
+	order         pb.OrderServiceClient
+	commerceOrder pb.CommerceOrderServiceClient
+	catalog       pb.CatalogServiceClient
+	inventory     pb.InventoryServiceClient
 }
 
 func initGRPCClients() grpcClients {
@@ -53,12 +54,18 @@ func initGRPCClients() grpcClients {
 		inventoryName = contracts.ServiceInventory
 	}
 	inventoryConn := dialService(inventoryName, config.Conf.Inventory.Address, etcdResolver)
+	orderServiceName := config.Conf.Order.ServiceName
+	if orderServiceName == "" {
+		orderServiceName = contracts.ServiceOrder
+	}
+	commerceOrderConn := dialService(orderServiceName, config.Conf.Order.Address, etcdResolver)
 
 	return grpcClients{
-		product:   pb.NewProductServiceClient(productConn),
-		order:     pb.NewOrderServiceClient(orderConn),
-		catalog:   pb.NewCatalogServiceClient(catalogConn),
-		inventory: pb.NewInventoryServiceClient(inventoryConn),
+		product:       pb.NewProductServiceClient(productConn),
+		order:         pb.NewOrderServiceClient(orderConn),
+		commerceOrder: pb.NewCommerceOrderServiceClient(commerceOrderConn),
+		catalog:       pb.NewCatalogServiceClient(catalogConn),
+		inventory:     pb.NewInventoryServiceClient(inventoryConn),
 	}
 }
 

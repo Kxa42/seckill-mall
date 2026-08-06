@@ -39,3 +39,17 @@ type Repository interface {
 	ConfirmOrder(ctx context.Context, userID uint64, orderID string, now time.Time) (Order, error)
 	RefundOrder(ctx context.Context, userID uint64, orderID, refundNo, reason string, now time.Time) (Refund, Order, error)
 }
+
+// PaymentTransitionRepository 只允许过渡支付模块读写支付记录，不包含订单状态转换。
+// Order Service 模式通过该可选接口完成支付回调的记录落库。
+type PaymentTransitionRepository interface {
+	GetPayment(ctx context.Context, paymentNo string) (Payment, error)
+	MarkPaymentSucceeded(ctx context.Context, paymentNo, callbackRef string, now time.Time) (Payment, error)
+}
+
+// FulfillmentTransitionRepository 保存支付之外的过渡履约数据，但不得修改订单状态。
+type FulfillmentTransitionRepository interface {
+	RecordShipment(ctx context.Context, orderID, carrier, trackingNo string, now time.Time) (Shipment, error)
+	MarkShipmentReceived(ctx context.Context, orderID string, now time.Time) (Shipment, error)
+	RecordRefund(ctx context.Context, userID uint64, orderID, refundNo, reason string, now time.Time) (Refund, error)
+}

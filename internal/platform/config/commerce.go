@@ -12,28 +12,34 @@ const minimumSecretLength = 32
 
 // Commerce 描述 commerce-api 的运行配置。
 type Commerce struct {
-	HTTPAddr          string
-	StoreDriver       string
-	MySQLDSN          string
-	JWTSecret         string
-	MockPaymentSecret string
-	AccessTokenTTL    time.Duration
-	RefreshTokenTTL   time.Duration
-	OrderTTL          time.Duration
-	AdminEmail        string
-	AdminPassword     string
+	HTTPAddr           string
+	StoreDriver        string
+	MySQLDSN           string
+	OrderWriteMode     string
+	OrderServiceAddr   string
+	InternalCallSecret string
+	JWTSecret          string
+	MockPaymentSecret  string
+	AccessTokenTTL     time.Duration
+	RefreshTokenTTL    time.Duration
+	OrderTTL           time.Duration
+	AdminEmail         string
+	AdminPassword      string
 }
 
 // LoadCommerce 从环境变量加载并校验商城 API 配置。
 func LoadCommerce() (Commerce, error) {
 	cfg := Commerce{
-		HTTPAddr:          envOrDefault("SECKILL_COMMERCE_HTTP_ADDR", ":8081"),
-		StoreDriver:       strings.ToLower(envOrDefault("SECKILL_COMMERCE_STORE", "mysql")),
-		MySQLDSN:          strings.TrimSpace(os.Getenv("SECKILL_MYSQL_DSN")),
-		JWTSecret:         strings.TrimSpace(os.Getenv("SECKILL_JWT_SECRET")),
-		MockPaymentSecret: strings.TrimSpace(os.Getenv("SECKILL_MOCK_PAYMENT_SECRET")),
-		AdminEmail:        strings.TrimSpace(os.Getenv("SECKILL_ADMIN_EMAIL")),
-		AdminPassword:     os.Getenv("SECKILL_ADMIN_PASSWORD"),
+		HTTPAddr:           envOrDefault("SECKILL_COMMERCE_HTTP_ADDR", ":8081"),
+		StoreDriver:        strings.ToLower(envOrDefault("SECKILL_COMMERCE_STORE", "mysql")),
+		MySQLDSN:           strings.TrimSpace(os.Getenv("SECKILL_MYSQL_DSN")),
+		OrderWriteMode:     strings.ToLower(envOrDefault("SECKILL_COMMERCE_ORDER_MODE", "legacy")),
+		OrderServiceAddr:   strings.TrimSpace(os.Getenv("SECKILL_ORDER_ADDR")),
+		InternalCallSecret: strings.TrimSpace(os.Getenv("SECKILL_INTERNAL_CALL_SECRET")),
+		JWTSecret:          strings.TrimSpace(os.Getenv("SECKILL_JWT_SECRET")),
+		MockPaymentSecret:  strings.TrimSpace(os.Getenv("SECKILL_MOCK_PAYMENT_SECRET")),
+		AdminEmail:         strings.TrimSpace(os.Getenv("SECKILL_ADMIN_EMAIL")),
+		AdminPassword:      os.Getenv("SECKILL_ADMIN_PASSWORD"),
 	}
 
 	var err error
@@ -49,6 +55,17 @@ func LoadCommerce() (Commerce, error) {
 
 	if cfg.StoreDriver != "mysql" && cfg.StoreDriver != "memory" {
 		return Commerce{}, fmt.Errorf("SECKILL_COMMERCE_STORE 只支持 mysql 或 memory")
+	}
+	if cfg.OrderWriteMode != "legacy" && cfg.OrderWriteMode != "order_service" {
+		return Commerce{}, fmt.Errorf("SECKILL_COMMERCE_ORDER_MODE 只支持 legacy 或 order_service")
+	}
+	if cfg.OrderWriteMode == "order_service" {
+		if cfg.OrderServiceAddr == "" {
+			return Commerce{}, fmt.Errorf("order_service 模式下 SECKILL_ORDER_ADDR 不能为空")
+		}
+		if len(cfg.InternalCallSecret) < minimumSecretLength {
+			return Commerce{}, fmt.Errorf("order_service 模式下 SECKILL_INTERNAL_CALL_SECRET 长度不能小于 %d", minimumSecretLength)
+		}
 	}
 	if cfg.StoreDriver == "mysql" && cfg.MySQLDSN == "" {
 		return Commerce{}, fmt.Errorf("SECKILL_MYSQL_DSN 不能为空")

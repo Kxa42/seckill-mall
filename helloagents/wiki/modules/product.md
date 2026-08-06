@@ -26,14 +26,14 @@
 
 ## 迁移边界
 - Catalog Service 只读 `categories`、`spus`、`skus`、`product_images`；商品查询已由 Gateway 切换到 Catalog。
-- Inventory/Seckill Service 负责新 reservation 状态机和秒杀准入；本阶段 `/api/v1/seckill/orders` 尚未切换到它。
+- Inventory/Seckill Service 负责新 reservation 状态机、秒杀准入和退款 Restock；新 `/api/v1/seckill/orders` 由 Order Service 统一调用它，旧 `/order` 仍使用本模块的兼容 Redis/MQ 链路。
 
 ## 依赖
 - 旧服务依赖 MySQL、Redis、etcd、gRPC 和 Prometheus。
 - 新目录与库存不再由本模块实现；Commerce 只保留未迁移交易链路。
 
 ## 当前边界
-- `/api/v1/seckill/orders` 尚未复用旧 Redis Lua 准入，当前使用 MySQL reservation 防超卖。
+- 新 `/api/v1/seckill/orders` 不复用本模块旧 Redis Lua，而是由 Order Service 调用独立 Inventory；旧 `/order` 继续使用本模块 Redis Lua。
 - `seckill_activities` 已建表，但活动运营 API 和时间窗校验尚未接入。
 
 ## 变更历史

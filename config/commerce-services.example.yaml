@@ -2,7 +2,9 @@
 # 这是服务拆分阶段的配置基线；敏感值必须通过环境变量或密钥管理系统注入。
 # 每个业务服务拥有独立监听地址、DSN、RabbitMQ 和 etcd 配置，禁止跨服务复用业务 DSN。
 # 入口通过 SECKILL_SERVICES_CONFIG 显式加载本文件；${VAR} 只会在对应服务启动时展开。
-# 未设置所需环境变量时，服务会在启动前失败，且不会输出变量值。
+# 必填字段（name/address/etcd_addr）缺失或引用的环境变量缺失时，服务在启动前失败；
+# 可选凭据（mysql_dsn/rabbitmq_url/redis_password）即便 ${VAR} 变量未设置也会回退为空，
+# 服务可在无 Docker / 无外部位点环境以内存或本地模式启动，错误信息不包含任何变量值。
 
 services:
   identity:
@@ -15,20 +17,28 @@ services:
   catalog:
     name: catalog-service
     address: 127.0.0.1:51002
+    # mysql_dsn / rabbitmq_url 为可选：未设置回退为空，catalog 以内存仓储启动。
     mysql_dsn: "${CATALOG_MYSQL_DSN}"
     rabbitmq_url: "${CATALOG_RABBITMQ_URL}"
     etcd_addr: 127.0.0.1:2379
+    # metrics_port 为可选，留空则不启动独立 metrics server。
+    metrics_port: "9102"
 
   inventory:
     name: inventory-service
     address: 127.0.0.1:51003
+    # mysql_dsn / rabbitmq_url 为可选；inventory 当前不发事件，未设置回退为空。
     mysql_dsn: "${INVENTORY_MYSQL_DSN}"
     rabbitmq_url: "${INVENTORY_RABBITMQ_URL}"
     etcd_addr: 127.0.0.1:2379
     redis_addr: 127.0.0.1:6379
+    # redis_password 为可选；本地无密码 Redis 留空即可。
+    redis_password: "${INVENTORY_REDIS_PASSWORD}"
     redis_db: 2
+    # store=redis 时 redis_addr 必填；store=memory 或留空时本地内存状态机。
     store: redis
     purchase_limit: 5
+    metrics_port: "9103"
 
   cart:
     name: cart-service
@@ -63,4 +73,12 @@ gateway:
   http_address: 127.0.0.1:8080
   etcd_addr: 127.0.0.1:2379
   commerce_url: http://127.0.0.1:8081 # 迁移期间兼容代理地址
+  # metrics_port 为可选，留空则不启动独立 metrics server。
+  metrics_port: "9090"
+  # mode 留空按 release 处理；debug 模式注册本地模拟登录路由。
+  mode: "debug"
+  # JWT 为可选；仅 debug 模式本地模拟登录需要 expire 与 secret。
+  jwt:
+    expire: "24h"
+    secret: "${SECKILL_JWT_SECRET}"
   # Gateway 只调用服务，不配置任何业务数据库 DSN。

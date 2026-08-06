@@ -8,6 +8,7 @@ const (
 	ReservationReserved  = "reserved"
 	ReservationConfirmed = "confirmed"
 	ReservationReleased  = "released"
+	ReservationRestocked = "restocked"
 	ReservationExpired   = "expired"
 )
 
@@ -42,4 +43,5 @@ type SeckillAdmissionCommand struct {
 	UserID     uint64
 	SKUID      uint64
 	Quantity   int32
+	OrderID    string
 }
