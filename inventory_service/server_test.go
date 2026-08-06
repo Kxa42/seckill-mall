@@ -65,6 +65,29 @@ func TestMemoryStoreReservationStateMachine(t *testing.T) {
 	}
 }
 
+func TestMemoryStoreWritesStreamOutboxExactlyOnce(t *testing.T) {
+	store := NewMemoryStore(map[uint64]int32{7: 2}, 1)
+	stream := NewMemoryEventStream()
+	store.SetEventStream(stream)
+	command := ReserveCommand{ReservationID: "stream-reserve", OrderID: "stream-order", UserID: 9, SKUID: 7, Quantity: 1, Mode: "normal"}
+	if _, err := store.Reserve(context.Background(), command); err != nil {
+		t.Fatalf("Reserve() error = %v", err)
+	}
+	if _, err := store.Reserve(context.Background(), command); err != nil {
+		t.Fatalf("duplicate Reserve() error = %v", err)
+	}
+	if _, err := store.Confirm(context.Background(), command.ReservationID, command.OrderID); err != nil {
+		t.Fatalf("Confirm() error = %v", err)
+	}
+	if _, err := store.Restock(context.Background(), command.ReservationID, command.OrderID); err != nil {
+		t.Fatalf("Restock() error = %v", err)
+	}
+	events := stream.Events()
+	if len(events) != 2 || events[0].Event.EventType != "inventory.reserved.v1" || events[1].Event.EventType != "inventory.restocked.v1" {
+		t.Fatalf("unexpected stream events: %+v", events)
+	}
+}
+
 func TestMemoryStoreRestockRollsBackSeckillPurchaseLimit(t *testing.T) {
 	store := NewMemoryStore(map[uint64]int32{13: 1}, 1)
 	reservation, err := store.AdmitSeckill(context.Background(), SeckillAdmissionCommand{RequestID: "refund-request", OrderID: "refund-order", ActivityID: 100, UserID: 9, SKUID: 13, Quantity: 1})

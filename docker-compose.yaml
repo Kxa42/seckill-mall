@@ -7,8 +7,7 @@ services:
     environment:
       MYSQL_ROOT_PASSWORD: "${SECKILL_MYSQL_ROOT_PASSWORD:?SECKILL_MYSQL_ROOT_PASSWORD is required}"
       MYSQL_DATABASE: seckill
-    command:
-      - --default-authentication-plugin=mysql_native_password
+    command: ["--default-authentication-plugin=mysql_native_password"]
     volumes:
       - mysql_data:/var/lib/mysql
       - ./deploy/mysql/init.sql:/docker-entrypoint-initdb.d/001-init.sql:ro
@@ -17,34 +16,24 @@ services:
       interval: 5s
       timeout: 5s
       retries: 30
-    restart: unless-stopped
 
   migrate:
     build:
       context: .
-      args:
-        PACKAGE: ./cmd/migrate
+      args: {PACKAGE: ./cmd/migrate}
     environment:
       SECKILL_MYSQL_DSN: "root:${SECKILL_MYSQL_ROOT_PASSWORD:?SECKILL_MYSQL_ROOT_PASSWORD is required}@tcp(mysql:3306)/seckill?charset=utf8mb4&parseTime=True&loc=UTC"
       SECKILL_MIGRATIONS_DIR: /app/migrations
     depends_on:
-      mysql:
-        condition: service_healthy
+      mysql: {condition: service_healthy}
     restart: "no"
 
   redis:
     image: redis:7.4-alpine
     container_name: redis-seckill
-    ports:
-      - "6379:6379"
-    volumes:
-      - redis_data:/data
-    command:
-      - redis-server
-      - --appendonly
-      - "yes"
-      - --requirepass
-      - "${SECKILL_REDIS_PASSWORD:?SECKILL_REDIS_PASSWORD is required}"
+    ports: ["6379:6379"]
+    volumes: [redis_data:/data]
+    command: [redis-server, --appendonly, "yes", --requirepass, "${SECKILL_REDIS_PASSWORD:?SECKILL_REDIS_PASSWORD is required}"]
     healthcheck:
       test: ["CMD-SHELL", "redis-cli -a \"$${SECKILL_REDIS_PASSWORD}\" ping | grep PONG"]
       interval: 5s
@@ -52,15 +41,11 @@ services:
       retries: 20
     environment:
       SECKILL_REDIS_PASSWORD: "${SECKILL_REDIS_PASSWORD:?SECKILL_REDIS_PASSWORD is required}"
-    restart: unless-stopped
 
   rabbitmq:
     image: rabbitmq:3.13-management
     container_name: seckill-rabbitmq
-    ports:
-      - "5672:5672"
-      - "15672:15672"
-      - "15692:15692"
+    ports: ["5672:5672", "15672:15672", "15692:15692"]
     environment:
       RABBITMQ_DEFAULT_USER: "${SECKILL_RABBITMQ_USER:?SECKILL_RABBITMQ_USER is required}"
       RABBITMQ_DEFAULT_PASS: "${SECKILL_RABBITMQ_PASSWORD:?SECKILL_RABBITMQ_PASSWORD is required}"
@@ -68,18 +53,15 @@ services:
       - rabbitmq_data:/var/lib/rabbitmq
       - ./deploy/rabbitmq/enabled_plugins:/etc/rabbitmq/enabled_plugins:ro
     healthcheck:
-      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      test: ["CMD", rabbitmq-diagnostics, -q, ping]
       interval: 10s
       timeout: 5s
       retries: 20
-    restart: unless-stopped
 
   etcd:
     image: quay.io/coreos/etcd:v3.5.9
     container_name: seckill-etcd
-    ports:
-      - "2379:2379"
-      - "2380:2380"
+    ports: ["2379:2379", "2380:2380"]
     command:
       - /usr/local/bin/etcd
       - --name=seckill-etcd
@@ -89,151 +71,53 @@ services:
       - --listen-peer-urls=http://0.0.0.0:2380
       - --initial-cluster=seckill-etcd=http://0.0.0.0:2380
       - --data-dir=/etcd-data
-    volumes:
-      - etcd_data:/etcd-data
+    volumes: [etcd_data:/etcd-data]
     healthcheck:
-      test: ["CMD", "/usr/local/bin/etcdctl", "endpoint", "health"]
+      test: ["CMD", /usr/local/bin/etcdctl, endpoint, health]
       interval: 5s
       timeout: 5s
       retries: 20
-    restart: unless-stopped
 
   jaeger:
     image: jaegertracing/all-in-one:1.62.0
     container_name: seckill-jaeger
-    ports:
-      - "16686:16686"
-      - "4317:4317"
-      - "4318:4318"
-    environment:
-      COLLECTOR_OTLP_ENABLED: "true"
-    restart: unless-stopped
-
-  commerce-api:
-    build:
-      context: .
-      args:
-        PACKAGE: ./cmd/commerce-api
-    container_name: seckill-commerce-api
-    ports:
-      - "8081:8081"
-    environment:
-      SECKILL_COMMERCE_HTTP_ADDR: :8081
-      SECKILL_COMMERCE_STORE: mysql
-      SECKILL_MYSQL_DSN: "root:${SECKILL_MYSQL_ROOT_PASSWORD:?SECKILL_MYSQL_ROOT_PASSWORD is required}@tcp(mysql:3306)/seckill?charset=utf8mb4&parseTime=True&loc=UTC"
-      SECKILL_JWT_SECRET: "${SECKILL_JWT_SECRET:?SECKILL_JWT_SECRET is required}"
-      SECKILL_MOCK_PAYMENT_SECRET: "${SECKILL_MOCK_PAYMENT_SECRET:?SECKILL_MOCK_PAYMENT_SECRET is required}"
-      SECKILL_COMMERCE_ORDER_MODE: order_service
-      SECKILL_ORDER_ADDR: order-service:51005
-      SECKILL_INTERNAL_CALL_SECRET: "${SECKILL_INTERNAL_CALL_SECRET:?SECKILL_INTERNAL_CALL_SECRET is required}"
-      SECKILL_ADMIN_EMAIL: "${SECKILL_ADMIN_EMAIL:-}"
-      SECKILL_ADMIN_PASSWORD: "${SECKILL_ADMIN_PASSWORD:-}"
-    depends_on:
-      migrate:
-        condition: service_completed_successfully
-      order-service:
-        condition: service_healthy
-    healthcheck:
-      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8081/readyz"]
-      interval: 5s
-      timeout: 5s
-      retries: 20
-    restart: unless-stopped
-
-  product-service:
-    build:
-      context: .
-      args:
-        PACKAGE: ./product_service
-    container_name: seckill-product-service
-    ports:
-      - "50051:50051"
-      - "9091:9091"
-    environment:
-      SECKILL_MYSQL_DSN: "root:${SECKILL_MYSQL_ROOT_PASSWORD:?SECKILL_MYSQL_ROOT_PASSWORD is required}@tcp(mysql:3306)/seckill?charset=utf8mb4&parseTime=True&loc=UTC"
-      SECKILL_REDIS_ADDR: redis:6379
-      SECKILL_REDIS_PASSWORD: "${SECKILL_REDIS_PASSWORD:?SECKILL_REDIS_PASSWORD is required}"
-      SECKILL_ETCD_ADDR: etcd:2379
-      SECKILL_ADVERTISE_ADDR: product-service:50051
-      SECKILL_OTEL_ENDPOINT: jaeger:4318
-      SECKILL_SERVER_MODE: release
-    depends_on:
-      mysql:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
-      etcd:
-        condition: service_healthy
-    healthcheck:
-      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:9091/metrics"]
-      interval: 5s
-      timeout: 5s
-      retries: 20
-    restart: unless-stopped
+    ports: ["16686:16686", "4317:4317", "4318:4318"]
+    environment: {COLLECTOR_OTLP_ENABLED: "true"}
 
   catalog-service:
-    build:
-      context: .
-      args:
-        PACKAGE: ./cmd/catalog-service
+    build: {context: ., args: {PACKAGE: ./cmd/catalog-service}}
     container_name: seckill-catalog-service
-    ports:
-      - "51002:51002"
-      - "9102:9102"
+    ports: ["51002:51002", "9102:9102"]
     environment:
       SECKILL_CATALOG_MYSQL_DSN: "root:${SECKILL_MYSQL_ROOT_PASSWORD:?SECKILL_MYSQL_ROOT_PASSWORD is required}@tcp(mysql:3306)/seckill?charset=utf8mb4&parseTime=True&loc=UTC"
       SECKILL_ETCD_ADDR: etcd:2379
       SECKILL_ADVERTISE_ADDR: catalog-service:51002
       SECKILL_SERVER_MODE: release
     depends_on:
-      migrate:
-        condition: service_completed_successfully
-      etcd:
-        condition: service_healthy
-    healthcheck:
-      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:9102/metrics"]
-      interval: 5s
-      timeout: 5s
-      retries: 20
-    restart: unless-stopped
+      migrate: {condition: service_completed_successfully}
+      etcd: {condition: service_healthy}
 
   inventory-service:
-    build:
-      context: .
-      args:
-        PACKAGE: ./cmd/inventory-service
+    build: {context: ., args: {PACKAGE: ./cmd/inventory-service}}
     container_name: seckill-inventory-service
-    ports:
-      - "51003:51003"
-      - "9103:9103"
+    ports: ["51003:51003", "9103:9103"]
     environment:
       SECKILL_INVENTORY_STORE: redis
       SECKILL_INVENTORY_REDIS_ADDR: redis:6379
       SECKILL_INVENTORY_REDIS_PASSWORD: "${SECKILL_REDIS_PASSWORD:?SECKILL_REDIS_PASSWORD is required}"
       SECKILL_INVENTORY_REDIS_DB: "2"
+      SECKILL_MQ_URL: "amqp://${SECKILL_RABBITMQ_USER:?SECKILL_RABBITMQ_USER is required}:${SECKILL_RABBITMQ_PASSWORD:?SECKILL_RABBITMQ_PASSWORD is required}@rabbitmq:5672/"
       SECKILL_ETCD_ADDR: etcd:2379
       SECKILL_ADVERTISE_ADDR: inventory-service:51003
       SECKILL_SERVER_MODE: release
     depends_on:
-      redis:
-        condition: service_healthy
-      etcd:
-        condition: service_healthy
-    healthcheck:
-      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:9103/metrics"]
-      interval: 5s
-      timeout: 5s
-      retries: 20
-    restart: unless-stopped
+      redis: {condition: service_healthy}
+      etcd: {condition: service_healthy}
 
   identity-service:
-    build:
-      context: .
-      args:
-        PACKAGE: ./cmd/identity-snapshot-service
+    build: {context: ., args: {PACKAGE: ./cmd/identity-snapshot-service}}
     container_name: seckill-identity-service
-    ports:
-      - "51001:51001"
+    ports: ["51001:51001"]
     environment:
       SECKILL_IDENTITY_MYSQL_DSN: "root:${SECKILL_MYSQL_ROOT_PASSWORD:?SECKILL_MYSQL_ROOT_PASSWORD is required}@tcp(mysql:3306)/seckill?charset=utf8mb4&parseTime=True&loc=UTC"
       SECKILL_ETCD_ADDR: etcd:2379
@@ -241,28 +125,14 @@ services:
       SECKILL_SERVER_MODE: release
       SECKILL_JWT_SECRET: "${SECKILL_JWT_SECRET:?SECKILL_JWT_SECRET is required}"
       SECKILL_INTERNAL_CALL_SECRET: "${SECKILL_INTERNAL_CALL_SECRET:?SECKILL_INTERNAL_CALL_SECRET is required}"
-      SECKILL_ADMIN_EMAIL: "${SECKILL_ADMIN_EMAIL:-}"
-      SECKILL_ADMIN_PASSWORD: "${SECKILL_ADMIN_PASSWORD:-}"
     depends_on:
-      migrate:
-        condition: service_completed_successfully
-      etcd:
-        condition: service_healthy
-    healthcheck:
-      test: ["CMD-SHELL", "kill -0 1"]
-      interval: 5s
-      timeout: 5s
-      retries: 20
-    restart: unless-stopped
+      migrate: {condition: service_completed_successfully}
+      etcd: {condition: service_healthy}
 
   cart-service:
-    build:
-      context: .
-      args:
-        PACKAGE: ./cmd/cart-service
+    build: {context: ., args: {PACKAGE: ./cmd/cart-service}}
     container_name: seckill-cart-service
-    ports:
-      - "51004:51004"
+    ports: ["51004:51004"]
     environment:
       SECKILL_CART_MYSQL_DSN: "root:${SECKILL_MYSQL_ROOT_PASSWORD:?SECKILL_MYSQL_ROOT_PASSWORD is required}@tcp(mysql:3306)/seckill?charset=utf8mb4&parseTime=True&loc=UTC"
       SECKILL_CATALOG_ADDR: catalog-service:51002
@@ -271,242 +141,85 @@ services:
       SECKILL_INTERNAL_CALL_SECRET: "${SECKILL_INTERNAL_CALL_SECRET:?SECKILL_INTERNAL_CALL_SECRET is required}"
       SECKILL_SERVER_MODE: release
     depends_on:
-      migrate:
-        condition: service_completed_successfully
-      etcd:
-        condition: service_healthy
-      catalog-service:
-        condition: service_healthy
-    healthcheck:
-      test: ["CMD-SHELL", "kill -0 1"]
-      interval: 5s
-      timeout: 5s
-      retries: 20
-    restart: unless-stopped
+      migrate: {condition: service_completed_successfully}
+      catalog-service: {condition: service_started}
+      etcd: {condition: service_healthy}
 
   order-service:
-    build:
-      context: .
-      args:
-        PACKAGE: ./cmd/order-service
+    build: {context: ., args: {PACKAGE: ./cmd/order-service}}
     container_name: seckill-order-service
-    ports:
-      - "51005:51005"
+    ports: ["51005:51005"]
     environment:
       SECKILL_ORDER_MYSQL_DSN: "root:${SECKILL_MYSQL_ROOT_PASSWORD:?SECKILL_MYSQL_ROOT_PASSWORD is required}@tcp(mysql:3306)/seckill?charset=utf8mb4&parseTime=True&loc=UTC"
       SECKILL_CATALOG_ADDR: catalog-service:51002
       SECKILL_IDENTITY_ADDR: identity-service:51001
       SECKILL_INVENTORY_ADDR: inventory-service:51003
       SECKILL_ORDER_ADDR: order-service:51005
+      SECKILL_MQ_URL: "amqp://${SECKILL_RABBITMQ_USER:?SECKILL_RABBITMQ_USER is required}:${SECKILL_RABBITMQ_PASSWORD:?SECKILL_RABBITMQ_PASSWORD is required}@rabbitmq:5672/"
       SECKILL_ETCD_ADDR: etcd:2379
       SECKILL_ADVERTISE_ADDR: order-service:51005
       SECKILL_INTERNAL_CALL_SECRET: "${SECKILL_INTERNAL_CALL_SECRET:?SECKILL_INTERNAL_CALL_SECRET is required}"
-      SECKILL_OTEL_ENDPOINT: jaeger:4318
+      SECKILL_SERVER_MODE: release
     depends_on:
-      migrate:
-        condition: service_completed_successfully
-      etcd:
-        condition: service_healthy
-      catalog-service:
-        condition: service_healthy
-      inventory-service:
-        condition: service_healthy
-      identity-service:
-        condition: service_healthy
-    healthcheck:
-      test: ["CMD-SHELL", "kill -0 1"]
-      interval: 5s
-      timeout: 5s
-      retries: 20
-    restart: unless-stopped
+      migrate: {condition: service_completed_successfully}
+      rabbitmq: {condition: service_healthy}
+      catalog-service: {condition: service_started}
+      identity-service: {condition: service_started}
+      inventory-service: {condition: service_started}
+      etcd: {condition: service_healthy}
 
   payment-service:
-    build:
-      context: .
-      args:
-        PACKAGE: ./cmd/payment-service
+    build: {context: ., args: {PACKAGE: ./cmd/payment-service}}
     container_name: seckill-payment-service
-    ports:
-      - "51006:51006"
+    ports: ["51006:51006"]
     environment:
       SECKILL_PAYMENT_MYSQL_DSN: "root:${SECKILL_MYSQL_ROOT_PASSWORD:?SECKILL_MYSQL_ROOT_PASSWORD is required}@tcp(mysql:3306)/seckill?charset=utf8mb4&parseTime=True&loc=UTC"
       SECKILL_PAYMENT_SECRET: "${SECKILL_PAYMENT_SECRET:?SECKILL_PAYMENT_SECRET is required}"
       SECKILL_ORDER_ADDR: order-service:51005
+      SECKILL_MQ_URL: "amqp://${SECKILL_RABBITMQ_USER:?SECKILL_RABBITMQ_USER is required}:${SECKILL_RABBITMQ_PASSWORD:?SECKILL_RABBITMQ_PASSWORD is required}@rabbitmq:5672/"
       SECKILL_ETCD_ADDR: etcd:2379
       SECKILL_ADVERTISE_ADDR: payment-service:51006
       SECKILL_INTERNAL_CALL_SECRET: "${SECKILL_INTERNAL_CALL_SECRET:?SECKILL_INTERNAL_CALL_SECRET is required}"
       SECKILL_SERVER_MODE: release
     depends_on:
-      migrate:
-        condition: service_completed_successfully
-      etcd:
-        condition: service_healthy
-      order-service:
-        condition: service_healthy
-    healthcheck:
-      test: ["CMD-SHELL", "kill -0 1"]
-      interval: 5s
-      timeout: 5s
-      retries: 20
-    restart: unless-stopped
+      migrate: {condition: service_completed_successfully}
+      rabbitmq: {condition: service_healthy}
+      order-service: {condition: service_started}
+      etcd: {condition: service_healthy}
 
   fulfillment-service:
-    build:
-      context: .
-      args:
-        PACKAGE: ./cmd/fulfillment-service
+    build: {context: ., args: {PACKAGE: ./cmd/fulfillment-service}}
     container_name: seckill-fulfillment-service
-    ports:
-      - "51007:51007"
+    ports: ["51007:51007"]
     environment:
       SECKILL_FULFILLMENT_MYSQL_DSN: "root:${SECKILL_MYSQL_ROOT_PASSWORD:?SECKILL_MYSQL_ROOT_PASSWORD is required}@tcp(mysql:3306)/seckill?charset=utf8mb4&parseTime=True&loc=UTC"
       SECKILL_ORDER_ADDR: order-service:51005
+      SECKILL_MQ_URL: "amqp://${SECKILL_RABBITMQ_USER:?SECKILL_RABBITMQ_USER is required}:${SECKILL_RABBITMQ_PASSWORD:?SECKILL_RABBITMQ_PASSWORD is required}@rabbitmq:5672/"
       SECKILL_ETCD_ADDR: etcd:2379
       SECKILL_ADVERTISE_ADDR: fulfillment-service:51007
       SECKILL_INTERNAL_CALL_SECRET: "${SECKILL_INTERNAL_CALL_SECRET:?SECKILL_INTERNAL_CALL_SECRET is required}"
       SECKILL_SERVER_MODE: release
     depends_on:
-      migrate:
-        condition: service_completed_successfully
-      etcd:
-        condition: service_healthy
-      order-service:
-        condition: service_healthy
-    healthcheck:
-      test: ["CMD-SHELL", "kill -0 1"]
-      interval: 5s
-      timeout: 5s
-      retries: 20
-    restart: unless-stopped
-
-  legacy-order-service:
-    build:
-      context: .
-      args:
-        PACKAGE: ./order_service
-    container_name: seckill-legacy-order-service
-    ports:
-      - "50052:50052"
-      - "9092:9092"
-    environment:
-      SECKILL_MYSQL_DSN: "root:${SECKILL_MYSQL_ROOT_PASSWORD:?SECKILL_MYSQL_ROOT_PASSWORD is required}@tcp(mysql:3306)/seckill?charset=utf8mb4&parseTime=True&loc=UTC"
-      SECKILL_REDIS_ADDR: redis:6379
-      SECKILL_REDIS_PASSWORD: "${SECKILL_REDIS_PASSWORD:?SECKILL_REDIS_PASSWORD is required}"
-      SECKILL_ETCD_ADDR: etcd:2379
-      SECKILL_SERVER_PORT: "50052"
-      SECKILL_SERVER_METRICS_PORT: "9092"
-      SECKILL_ADVERTISE_ADDR: legacy-order-service:50052
-      SECKILL_OTEL_ENDPOINT: jaeger:4318
-    depends_on:
-      migrate:
-        condition: service_completed_successfully
-      etcd:
-        condition: service_healthy
-      product-service:
-        condition: service_healthy
-    healthcheck:
-      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:9092/metrics"]
-      interval: 5s
-      timeout: 5s
-      retries: 20
-    restart: unless-stopped
-
-  outbox-worker:
-    build:
-      context: .
-      args:
-        PACKAGE: ./outbox_worker
-    container_name: seckill-outbox-worker
-    ports:
-      - "9095:9095"
-    environment:
-      SECKILL_MYSQL_DSN: "root:${SECKILL_MYSQL_ROOT_PASSWORD:?SECKILL_MYSQL_ROOT_PASSWORD is required}@tcp(mysql:3306)/seckill?charset=utf8mb4&parseTime=True&loc=UTC"
-      SECKILL_REDIS_ADDR: redis:6379
-      SECKILL_REDIS_PASSWORD: "${SECKILL_REDIS_PASSWORD:?SECKILL_REDIS_PASSWORD is required}"
-      SECKILL_MQ_URL: "amqp://${SECKILL_RABBITMQ_USER:?SECKILL_RABBITMQ_USER is required}:${SECKILL_RABBITMQ_PASSWORD:?SECKILL_RABBITMQ_PASSWORD is required}@rabbitmq:5672/"
-      SECKILL_OTEL_ENDPOINT: jaeger:4318
-    depends_on:
-      mysql:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
-      rabbitmq:
-        condition: service_healthy
-    healthcheck:
-      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:9095/metrics"]
-      interval: 5s
-      timeout: 5s
-      retries: 20
-    restart: unless-stopped
-
-  mq-consumer:
-    build:
-      context: .
-      args:
-        PACKAGE: ./mq_consumer
-    container_name: seckill-mq-consumer
-    ports:
-      - "9093:9093"
-    environment:
-      SECKILL_MYSQL_DSN: "root:${SECKILL_MYSQL_ROOT_PASSWORD:?SECKILL_MYSQL_ROOT_PASSWORD is required}@tcp(mysql:3306)/seckill?charset=utf8mb4&parseTime=True&loc=UTC"
-      SECKILL_MQ_URL: "amqp://${SECKILL_RABBITMQ_USER:?SECKILL_RABBITMQ_USER is required}:${SECKILL_RABBITMQ_PASSWORD:?SECKILL_RABBITMQ_PASSWORD is required}@rabbitmq:5672/"
-      SECKILL_OTEL_ENDPOINT: jaeger:4318
-    depends_on:
-      mysql:
-        condition: service_healthy
-      rabbitmq:
-        condition: service_healthy
-    healthcheck:
-      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:9093/metrics"]
-      interval: 5s
-      timeout: 5s
-      retries: 20
-    restart: unless-stopped
-
-  dlq-consumer:
-    build:
-      context: .
-      args:
-        PACKAGE: ./dlq_consumer
-    container_name: seckill-dlq-consumer
-    ports:
-      - "9094:9094"
-    environment:
-      SECKILL_MYSQL_DSN: "root:${SECKILL_MYSQL_ROOT_PASSWORD:?SECKILL_MYSQL_ROOT_PASSWORD is required}@tcp(mysql:3306)/seckill?charset=utf8mb4&parseTime=True&loc=UTC"
-      SECKILL_REDIS_ADDR: redis:6379
-      SECKILL_REDIS_PASSWORD: "${SECKILL_REDIS_PASSWORD:?SECKILL_REDIS_PASSWORD is required}"
-      SECKILL_MQ_URL: "amqp://${SECKILL_RABBITMQ_USER:?SECKILL_RABBITMQ_USER is required}:${SECKILL_RABBITMQ_PASSWORD:?SECKILL_RABBITMQ_PASSWORD is required}@rabbitmq:5672/"
-      SECKILL_OTEL_ENDPOINT: jaeger:4318
-    depends_on:
-      mysql:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
-      rabbitmq:
-        condition: service_healthy
-    healthcheck:
-      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:9094/metrics"]
-      interval: 5s
-      timeout: 5s
-      retries: 20
-    restart: unless-stopped
+      migrate: {condition: service_completed_successfully}
+      rabbitmq: {condition: service_healthy}
+      order-service: {condition: service_started}
+      etcd: {condition: service_healthy}
 
   api-gateway:
-    build:
-      context: .
-      args:
-        PACKAGE: ./api_gateway
+    build: {context: ., args: {PACKAGE: ./api_gateway}}
     container_name: seckill-api-gateway
-    ports:
-      - "8080:8080"
+    ports: ["8080:8080"]
     environment:
       SECKILL_JWT_SECRET: "${SECKILL_JWT_SECRET:?SECKILL_JWT_SECRET is required}"
       SECKILL_ETCD_ADDR: etcd:2379
-      SECKILL_COMMERCE_URL: http://commerce-api:8081
       SECKILL_ORDER_SERVICE: order-service
       SECKILL_ORDER_ADDR: order-service:51005
       SECKILL_IDENTITY_SERVICE: identity-service
       SECKILL_IDENTITY_ADDR: identity-service:51001
+      SECKILL_CATALOG_SERVICE: catalog-service
+      SECKILL_CATALOG_ADDR: catalog-service:51002
+      SECKILL_INVENTORY_SERVICE: inventory-service
+      SECKILL_INVENTORY_ADDR: inventory-service:51003
       SECKILL_CART_SERVICE: cart-service
       SECKILL_CART_ADDR: cart-service:51004
       SECKILL_PAYMENT_SERVICE: payment-service
@@ -514,56 +227,30 @@ services:
       SECKILL_FULFILLMENT_SERVICE: fulfillment-service
       SECKILL_FULFILLMENT_ADDR: fulfillment-service:51007
       SECKILL_INTERNAL_CALL_SECRET: "${SECKILL_INTERNAL_CALL_SECRET:?SECKILL_INTERNAL_CALL_SECRET is required}"
-      SECKILL_OTEL_ENDPOINT: jaeger:4318
       SECKILL_SERVER_MODE: release
     depends_on:
-      commerce-api:
-        condition: service_healthy
-      product-service:
-        condition: service_healthy
-      order-service:
-        condition: service_healthy
-      identity-service:
-        condition: service_healthy
-      cart-service:
-        condition: service_healthy
-      payment-service:
-        condition: service_healthy
-      fulfillment-service:
-        condition: service_healthy
-      legacy-order-service:
-        condition: service_healthy
-      etcd:
-        condition: service_healthy
-    healthcheck:
-      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8080/healthz"]
-      interval: 5s
-      timeout: 5s
-      retries: 20
-    restart: unless-stopped
+      etcd: {condition: service_healthy}
+      identity-service: {condition: service_started}
+      catalog-service: {condition: service_started}
+      inventory-service: {condition: service_started}
+      cart-service: {condition: service_started}
+      order-service: {condition: service_started}
+      payment-service: {condition: service_started}
+      fulfillment-service: {condition: service_started}
 
   prometheus:
     image: prom/prometheus:v2.55.1
     container_name: seckill-prometheus
-    volumes:
-      - ./deploy/prometheus.yml:/etc/prometheus/prometheus.yml:ro
-    ports:
-      - "9090:9090"
-    depends_on:
-      api-gateway:
-        condition: service_healthy
-    restart: unless-stopped
+    volumes: [./deploy/prometheus.yml:/etc/prometheus/prometheus.yml:ro]
+    ports: ["9090:9090"]
+    depends_on: [api-gateway]
 
   grafana:
     image: grafana/grafana:11.3.0
     container_name: seckill-grafana
-    ports:
-      - "3000:3000"
-    depends_on:
-      - prometheus
-    volumes:
-      - grafana_data:/var/lib/grafana
-    restart: unless-stopped
+    ports: ["3000:3000"]
+    volumes: [grafana_data:/var/lib/grafana]
+    depends_on: [prometheus]
 
 volumes:
   mysql_data:

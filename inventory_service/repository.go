@@ -3,7 +3,19 @@ package inventoryservice
 import (
 	"context"
 	"errors"
+
+	"seckill-mall/common/contracts"
 )
+
+// StreamEvent 是库存状态和 Redis Stream Outbox 同步产生的事件记录。
+type StreamEvent struct {
+	ID    string
+	Event contracts.EventEnvelope
+}
+
+type EventStream interface {
+	Append(ctx context.Context, event contracts.EventEnvelope) error
+}
 
 var (
 	ErrInvalidRequest = errors.New("inventory request is invalid")

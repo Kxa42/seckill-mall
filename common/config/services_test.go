@@ -58,9 +58,6 @@ func TestLoadServiceRuntimeConfigMapsGatewayDiscoveryWithoutBusinessSecrets(t *t
 	if cfg.Payment.ServiceName != "payment-service" || cfg.Fulfillment.ServiceName != "fulfillment-service" {
 		t.Fatalf("unexpected gateway post-order discovery config: payment=%+v fulfillment=%+v", cfg.Payment, cfg.Fulfillment)
 	}
-	if cfg.Commerce.URL != "http://127.0.0.1:8081" {
-		t.Fatalf("unexpected gateway commerce URL: %q", cfg.Commerce.URL)
-	}
 	if cfg.MySQL.DSN != "" || cfg.MQ.URL != "" {
 		t.Fatalf("gateway must not inherit business service credentials: mysql=%q mq=%q", cfg.MySQL.DSN, cfg.MQ.URL)
 	}
@@ -345,7 +342,6 @@ gateway:
   name: api-gateway
   http_address: 127.0.0.1:8080
   etcd_addr: 127.0.0.1:2379
-  commerce_url: http://127.0.0.1:8081
   metrics_port: "9090"
   mode: "debug"
   jwt:

@@ -30,3 +30,18 @@ func TestLegacyLoginIsDisabledInReleaseMode(t *testing.T) {
 		t.Fatalf("POST /login status = %d, want %d", recorder.Code, http.StatusNotFound)
 	}
 }
+
+func TestLegacyOrderAndProductRoutesAreNotRegistered(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	config.Conf = &config.Config{Server: config.ServerConfig{Mode: "release"}}
+	router := gin.New()
+	registerRoutes(router, grpcClients{})
+	for _, path := range []string{"/order", "/order/ord-1", "/product/1"} {
+		request := httptest.NewRequest(http.MethodGet, path, nil)
+		recorder := httptest.NewRecorder()
+		router.ServeHTTP(recorder, request)
+		if recorder.Code != http.StatusNotFound {
+			t.Fatalf("GET %s status = %d, want %d", path, recorder.Code, http.StatusNotFound)
+		}
+	}
+}

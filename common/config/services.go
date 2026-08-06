@@ -35,7 +35,6 @@ type GatewayDefinition struct {
 	Name        string `mapstructure:"name"`
 	HTTPAddress string `mapstructure:"http_address"`
 	EtcdAddr    string `mapstructure:"etcd_addr"`
-	CommerceURL string `mapstructure:"commerce_url"`
 	// MetricsPort 为可选；留空则不启动独立 metrics server。
 	MetricsPort string `mapstructure:"metrics_port"`
 	// Mode 控制 debug 路由（如本地模拟登录）；留空按 release 处理。
@@ -88,7 +87,6 @@ func LoadServiceRuntimeConfig(path, role string) (*Config, error) {
 			MetricsPort: strings.TrimSpace(manifest.Gateway.MetricsPort),
 		}
 		cfg.Etcd.Addr = manifest.Gateway.EtcdAddr
-		cfg.Commerce.URL = manifest.Gateway.CommerceURL
 		cfg.JWT.Expire = strings.TrimSpace(manifest.Gateway.JWT.Expire)
 		cfg.JWT.Secret = strings.TrimSpace(manifest.Gateway.JWT.Secret)
 		for _, serviceRole := range []string{"identity", "catalog", "inventory", "cart", "order", "payment", "fulfillment"} {
@@ -293,7 +291,6 @@ func expandGatewayDefinition(definition *GatewayDefinition) error {
 		"name":         &definition.Name,
 		"http_address": &definition.HTTPAddress,
 		"etcd_addr":    &definition.EtcdAddr,
-		"commerce_url": &definition.CommerceURL,
 	} {
 		expanded, err := expandEnv(value)
 		if err != nil {

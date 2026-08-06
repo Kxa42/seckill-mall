@@ -20,7 +20,7 @@ const (
 	accessType    = "access"
 )
 
-// Claims 是 commerce-api 使用的 JWT 载荷。
+// Claims 是商城 Gateway 和服务间认证使用的 JWT 载荷。
 type Claims struct {
 	UserID    uint64 `json:"user_id"`
 	Role      string `json:"role"`

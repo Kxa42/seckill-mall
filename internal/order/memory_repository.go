@@ -6,6 +6,9 @@ import (
 	"sort"
 	"sync"
 	"time"
+
+	"seckill-mall/common/contracts"
+	"seckill-mall/common/messaging"
 )
 
 // MemoryRepository 是无 MySQL 环境下的 Order Service 验收实现。
@@ -15,6 +18,7 @@ type MemoryRepository struct {
 	idempotency map[string]string
 	intents     map[string]CreateIntent
 	operations  map[string]Operation
+	eventSink   messaging.EventSink
 }
 
 func NewMemoryRepository() *MemoryRepository {
@@ -25,6 +29,9 @@ func NewMemoryRepository() *MemoryRepository {
 		operations:  make(map[string]Operation),
 	}
 }
+
+// SetEventSink 注入 Order 自有 Outbox；未注入时保留纯内存状态机能力。
+func (r *MemoryRepository) SetEventSink(sink messaging.EventSink) { r.eventSink = sink }
 
 func (r *MemoryRepository) FindByIdempotency(_ context.Context, userID uint64, key string) (Order, bool, error) {
 	r.mu.RLock()
@@ -50,6 +57,15 @@ func (r *MemoryRepository) Create(_ context.Context, value Order) (Order, bool, 
 			return Order{}, false, NewError(CodeConflict, "Idempotency-Key 对应的请求参数不一致", nil)
 		}
 		return cloneOrder(existing), true, nil
+	}
+	if r.eventSink != nil {
+		event, err := messaging.NewEvent(fmt.Sprintf("order.created:%s", value.OrderID), contracts.EventOrderCreated, "order", value.OrderID, contracts.OrderCreatedPayload{OrderID: value.OrderID, UserID: value.UserID, OrderType: value.OrderType, TotalAmountCents: value.TotalAmountCents, Items: orderItemPayloads(value.Items)}, value.CreatedAt)
+		if err != nil {
+			return Order{}, false, err
+		}
+		if err := r.eventSink.AppendEvent(context.Background(), event, nil); err != nil {
+			return Order{}, false, err
+		}
 	}
 	r.orders[value.OrderID] = cloneOrder(value)
 	r.idempotency[key] = value.OrderID
@@ -160,11 +176,32 @@ func (r *MemoryRepository) Transition(_ context.Context, orderID string, userID 
 	if !canTransition(value.Status, target) {
 		return Order{}, NewError(CodeInvalidTransition, "当前订单状态不能执行该操作", nil)
 	}
+	if target == StatusCanceled && r.eventSink != nil {
+		reservationIDs := make([]string, 0, len(value.Items))
+		for _, item := range value.Items {
+			reservationIDs = append(reservationIDs, item.ReservationID)
+		}
+		event, err := messaging.NewEvent(fmt.Sprintf("order.cancelled:%s", value.OrderID), contracts.EventOrderCancelled, "order", value.OrderID, contracts.OrderCancelledPayload{OrderID: value.OrderID, UserID: value.UserID, Reason: reason, ReservationIDs: reservationIDs}, now)
+		if err != nil {
+			return Order{}, err
+		}
+		if err := r.eventSink.AppendEvent(context.Background(), event, nil); err != nil {
+			return Order{}, err
+		}
+	}
 	value.StatusHistory = append(value.StatusHistory, StatusHistory{FromStatus: value.Status, ToStatus: target, Reason: reason, ActorType: actorType, ActorID: actorID, CreatedAt: now})
 	value.Status = target
 	value.UpdatedAt = now
 	r.orders[orderID] = value
 	return cloneOrder(value), nil
+}
+
+func orderItemPayloads(items []Item) []contracts.OrderItemPayload {
+	values := make([]contracts.OrderItemPayload, 0, len(items))
+	for _, item := range items {
+		values = append(values, contracts.OrderItemPayload{SKUID: item.SKUID, Quantity: item.Quantity, ReservationID: item.ReservationID, UnitPriceCents: item.UnitPriceCents})
+	}
+	return values
 }
 
 func (r *MemoryRepository) SaveOperation(_ context.Context, value Operation) error {

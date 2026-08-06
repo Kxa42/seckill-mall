@@ -5,7 +5,7 @@ COPY go.mod go.sum ./
 RUN go mod download
 COPY . .
 
-ARG PACKAGE=./cmd/commerce-api
+ARG PACKAGE=./cmd/order-service
 RUN CGO_ENABLED=0 GOOS=linux go build -trimpath -ldflags="-s -w" -o /out/service ${PACKAGE}
 
 FROM alpine:3.22

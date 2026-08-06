@@ -6,6 +6,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"seckill-mall/common/contracts"
 )
 
 // MemoryStore 是不依赖 Redis/MySQL 的并发安全库存实现，用于 Fake E2E。
@@ -16,7 +18,11 @@ type MemoryStore struct {
 	purchased     map[string]int32
 	purchaseLimit int32
 	now           func() time.Time
+	eventStream   EventStream
 }
+
+// SetEventStream 注入库存专属 Stream Outbox；未注入时只运行本地状态机。
+func (s *MemoryStore) SetEventStream(stream EventStream) { s.eventStream = stream }
 
 // NewMemoryStore 创建库存服务内存实现，stock 表示每个 SKU 的可用库存。
 func NewMemoryStore(stock map[uint64]int32, purchaseLimit int32) *MemoryStore {
@@ -47,6 +53,9 @@ func (s *MemoryStore) Reserve(_ context.Context, command ReserveCommand) (Reserv
 	}
 	now := s.now()
 	reservation := Reservation{ReservationID: command.ReservationID, OrderID: command.OrderID, UserID: command.UserID, SKUID: command.SKUID, Quantity: command.Quantity, Status: ReservationReserved, Mode: command.Mode, CreatedAt: now, UpdatedAt: now}
+	if err := s.appendEvent(context.Background(), contracts.EventInventoryReserved, reservation, now); err != nil {
+		return Reservation{}, err
+	}
 	s.stock[command.SKUID] -= command.Quantity
 	s.reservations[command.ReservationID] = reservation
 	return reservation, nil
@@ -86,6 +95,11 @@ func (s *MemoryStore) Release(_ context.Context, reservationID, orderID string) 
 	case ReservationReleased, ReservationExpired:
 		return reservation, nil
 	case ReservationReserved:
+		reservation.Status = ReservationReleased
+		reservation.UpdatedAt = s.now()
+		if err := s.appendEvent(context.Background(), contracts.EventInventoryReleased, reservation, reservation.UpdatedAt); err != nil {
+			return Reservation{}, err
+		}
 		s.stock[reservation.SKUID] += reservation.Quantity
 		if reservation.Mode == "seckill" {
 			purchaseKey := fmt.Sprintf("%d:%d:%d", reservation.ActivityID, reservation.UserID, reservation.SKUID)
@@ -94,8 +108,6 @@ func (s *MemoryStore) Release(_ context.Context, reservationID, orderID string) 
 				delete(s.purchased, purchaseKey)
 			}
 		}
-		reservation.Status = ReservationReleased
-		reservation.UpdatedAt = s.now()
 		s.reservations[reservationID] = reservation
 		return reservation, nil
 	default:
@@ -116,6 +128,11 @@ func (s *MemoryStore) Restock(_ context.Context, reservationID, orderID string) 
 	case ReservationRestocked:
 		return reservation, nil
 	case ReservationConfirmed:
+		reservation.Status = ReservationRestocked
+		reservation.UpdatedAt = s.now()
+		if err := s.appendEvent(context.Background(), contracts.EventInventoryRestocked, reservation, reservation.UpdatedAt); err != nil {
+			return Reservation{}, err
+		}
 		s.stock[reservation.SKUID] += reservation.Quantity
 		if reservation.Mode == "seckill" {
 			purchaseKey := fmt.Sprintf("%d:%d:%d", reservation.ActivityID, reservation.UserID, reservation.SKUID)
@@ -124,8 +141,6 @@ func (s *MemoryStore) Restock(_ context.Context, reservationID, orderID string) 
 				delete(s.purchased, purchaseKey)
 			}
 		}
-		reservation.Status = ReservationRestocked
-		reservation.UpdatedAt = s.now()
 		s.reservations[reservationID] = reservation
 		return reservation, nil
 	default:
@@ -155,10 +170,27 @@ func (s *MemoryStore) AdmitSeckill(_ context.Context, command SeckillAdmissionCo
 	}
 	now := s.now()
 	reservation := Reservation{ReservationID: reservationID, OrderID: command.OrderID, UserID: command.UserID, ActivityID: command.ActivityID, SKUID: command.SKUID, Quantity: command.Quantity, Status: ReservationReserved, Mode: "seckill", CreatedAt: now, UpdatedAt: now}
+	if err := s.appendEvent(context.Background(), contracts.EventSeckillAccepted, reservation, now); err != nil {
+		return Reservation{}, err
+	}
+	if err := s.appendEvent(context.Background(), contracts.EventInventoryReserved, reservation, now); err != nil {
+		return Reservation{}, err
+	}
 	s.stock[command.SKUID] -= command.Quantity
 	s.purchased[purchaseKey] += command.Quantity
 	s.reservations[reservationID] = reservation
 	return reservation, nil
+}
+
+func (s *MemoryStore) appendEvent(ctx context.Context, eventType string, reservation Reservation, now time.Time) error {
+	if s.eventStream == nil {
+		return nil
+	}
+	event, err := contracts.NewEventEnvelope(eventType+":"+reservation.ReservationID, eventType, "reservation", reservation.ReservationID, 1, contracts.InventoryReservationPayload{ReservationID: reservation.ReservationID, OrderID: reservation.OrderID, UserID: reservation.UserID, SKUID: reservation.SKUID, Quantity: reservation.Quantity, Mode: reservation.Mode}, now)
+	if err != nil {
+		return err
+	}
+	return s.eventStream.Append(ctx, event)
 }
 
 func (s *MemoryStore) findReservation(reservationID, orderID string) (Reservation, error) {
@@ -204,6 +236,19 @@ func (s *MemoryStore) AvailableStock(skuID uint64) int32 {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	return s.stock[skuID]
+}
+
+// ReservationIDsByOrder 返回本地订单关联的 reservation，不跨服务读取订单表。
+func (s *MemoryStore) ReservationIDsByOrder(_ context.Context, orderID string) ([]string, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	values := make([]string, 0)
+	for reservationID, reservation := range s.reservations {
+		if reservation.OrderID == orderID {
+			values = append(values, reservationID)
+		}
+	}
+	return values, nil
 }
 
 var _ Store = (*MemoryStore)(nil)

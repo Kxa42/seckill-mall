@@ -11,16 +11,13 @@ jwt:
   expire: "24h"
   secret: "" # 推荐通过环境变量 SECKILL_JWT_SECRET 注入
 
-commerce:
-  url: "http://127.0.0.1:8081"
-
 catalog:
   service_name: "catalog-service"
   address: "" # 留空时通过 etcd://seckill/catalog-service 发现
 
 inventory:
   service_name: "inventory-service"
-  address: "" # 第二阶段仅建立客户端，秒杀订单仍由兼容代理处理
+  address: "" # 留空时通过 etcd://seckill/inventory-service 发现
 
 order:
   service_name: "order-service"

@@ -28,7 +28,7 @@ var serviceBoundaryCatalog = []ServiceBoundary{
 	{
 		Service:         ServiceInventory,
 		OwnedData:       []string{"inventory_stock", "inventory_reservations", "seckill_activities", "seckill_user_limits"},
-		PublishedEvents: []string{EventSeckillAccepted, EventInventoryReserved, EventInventoryReleased},
+		PublishedEvents: []string{EventSeckillAccepted, EventInventoryReserved, EventInventoryReleased, EventInventoryRestocked},
 	},
 	{
 		Service:   ServiceCart,

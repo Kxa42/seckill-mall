@@ -129,3 +129,25 @@ func TestInboxKeyIsStableForDuplicateEvents(t *testing.T) {
 		t.Fatalf("duplicate events should have the same inbox key: %q != %q", firstKey, duplicateKey)
 	}
 }
+
+func TestInventoryRestockedPayloadIsPartOfTheContract(t *testing.T) {
+	event, err := NewEventEnvelope("evt-restock", EventInventoryRestocked, "reservation", "res-1", 1, InventoryReservationPayload{
+		ReservationID: "res-1", OrderID: "ord-1", UserID: 9, SKUID: 1, Quantity: 1, Mode: "normal",
+	}, time.Now())
+	if err != nil {
+		t.Fatalf("NewEventEnvelope() error = %v", err)
+	}
+	if err := ValidateEventPayload(event); err != nil {
+		t.Fatalf("ValidateEventPayload() error = %v", err)
+	}
+}
+
+func TestKnownPayloadRejectsMissingRequiredField(t *testing.T) {
+	event, err := NewEventEnvelope("evt-invalid", EventPaymentSucceeded, "order", "ord-1", 1, map[string]any{"order_id": "ord-1"}, time.Now())
+	if err != nil {
+		t.Fatalf("NewEventEnvelope() error = %v", err)
+	}
+	if err := ValidateEventPayload(event); err == nil {
+		t.Fatal("missing payment fields should be rejected")
+	}
+}

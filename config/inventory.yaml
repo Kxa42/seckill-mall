@@ -13,5 +13,8 @@ inventory:
   redis_db: 2
   purchase_limit: 5
 
+mq:
+  url: "" # 推荐通过环境变量 SECKILL_MQ_URL 注入
+
 etcd:
   addr: "127.0.0.1:2379"

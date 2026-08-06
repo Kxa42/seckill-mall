@@ -27,7 +27,7 @@ services:
   inventory:
     name: inventory-service
     address: 127.0.0.1:51003
-    # mysql_dsn / rabbitmq_url 为可选；inventory 当前不发事件，未设置回退为空。
+    # mysql_dsn / rabbitmq_url 为可选；未设置时回退为空并使用本地状态机。
     mysql_dsn: "${INVENTORY_MYSQL_DSN}"
     rabbitmq_url: "${INVENTORY_RABBITMQ_URL}"
     etcd_addr: 127.0.0.1:2379
@@ -73,7 +73,6 @@ gateway:
   name: api-gateway
   http_address: 127.0.0.1:8080
   etcd_addr: 127.0.0.1:2379
-  commerce_url: http://127.0.0.1:8081 # 迁移期间兼容代理地址
   # metrics_port 为可选，留空则不启动独立 metrics server。
   metrics_port: "9090"
   # mode 留空按 release 处理；debug 模式注册本地模拟登录路由。

@@ -17,16 +17,20 @@
 - 新增 `SECKILL_SERVICES_CONFIG` 按角色配置加载器，支持严格环境变量展开、Gateway/Catalog/Inventory 映射和旧配置回退。
 - 建立商城微服务渐进式迁移方案，新增 Catalog、Inventory/Seckill、Identity、Cart、Order、Payment、Fulfillment 的版本化 gRPC 契约。
 - 新增 `common/contracts` 事件信封、事件类型、服务标识和独占数据所有权校验，覆盖后续 RabbitMQ Outbox/Inbox 迁移基线。
+- 新增统一 `common/messaging` Outbox/Inbox、Fake Broker、RabbitMQ Topic、Publisher Confirm、mandatory return、手动 Ack、retry/DLQ 和断线重连。
+- 新增 Order、Payment、Fulfillment 服务级 SQL Outbox/Inbox，以及 Inventory Redis Lua + Stream Outbox 到 RabbitMQ 的出站桥和 Redis Inbox。
+- 新增统一事件消费者：订单状态恢复、支付订单事实、库存取消/退款恢复和履约待发货事实；重复事件、未知事件和未来版本均有隔离测试。
+- 新增 `migrations/004_stage5_messaging.sql`、`tests/stage5_memory_e2e.sh` 和 `tests/stage5_rabbitmq_e2e.sh`。
 - 新增 `config/commerce-services.example.yaml`，明确目标服务独立地址、DSN、RabbitMQ、etcd 和 Inventory Redis 配置约定。
 - 新增独立 `cmd/catalog-service`、`cmd/inventory-service` 入口、Catalog Memory/MySQL Repository、Inventory Memory/Redis Lua Store、gRPC 健康检查和 etcd 注册适配。
 - 新增 Catalog/Inventory 的 bufconn Fake E2E，覆盖商品查询、库存预占状态机、重复命令、秒杀限购与释放回滚。
 
 ### 变更
-- Gateway 已将身份、地址、购物车、支付、退款、发货、收货和物流路由显式切换到目标领域服务；Commerce 仅保留迁移期 NoRoute/兼容回退。
-- 阶段 4 保持 RabbitMQ：旧秒杀 Outbox/MQ/DLQ 链路继续运行，新商城 Outbox/Inbox 运行时按计划留待阶段 5。
+- Gateway 已将 `/api/v1/*` 业务路由显式切换到目标领域服务；未注册路径直接返回 404，不再保留 Commerce NoRoute/兼容回退。
+- 阶段 5 统一 RabbitMQ `commerce.events.v1` 事件拓扑；旧秒杀 Outbox、MQ、DLQ Worker、旧 Product/Order 服务和旧 HTTP 入口已移除运行时装配。
+- `/order*`、`/product/*` 仅返回 404；新运行时只通过 `/api/v1/*` 访问，旧 `orders`、`product`、`outbox_events` 表只保留历史数据且停止读写。
 - Go 用户级 `GOTMPDIR` 设置为 `/tmp`，`GOCACHE` 设置为 `/tmp/go-build-cache`。
-- `commerce-api` 在 `order_service` 模式下关闭订单写入和超时 worker；支付、发货、收货和退款先调用 Order Service，再保存过渡数据。
-- `/api/v1/orders*` 和 `/api/v1/seckill/orders` 已由 Gateway 显式切换到 Order gRPC，旧 `/order` 继续保留旧秒杀/MQ 兼容链路。
+- `/api/v1/orders*` 和 `/api/v1/seckill/orders` 统一由 Order Service 编排，Inventory 是唯一 reservation/库存写入者。
 - Inventory 将支付前 `Release` 与退款后的 `Restock` 分离；秒杀退款同时回滚活动限购计数。
 - 本轮通过 Memory/Fake/bufconn、全仓测试、vet、全仓 race 和 Compose 静态校验；Docker daemon 不可用，真实基础设施联调跳过。
 - 修复不同 `Idempotency-Key` 相同请求摘要复用订单号的问题；稳定订单号和创建意图 ID 现在同时绑定用户、幂等键和请求摘要。
@@ -35,10 +39,10 @@
 
 - 统一 Catalog/Inventory 的服务发现键为 `catalog-service`、`inventory-service`，避免配置名与共享契约不一致。
 - 明确 `EventType` 与 `EventVersion` 独立演进，未知正数未来版本由消费者能力检查处理。
-- 知识库明确新商城目标为统一微服务架构，当前仍处于契约基线阶段，未宣称服务拆分已完成。
+- 知识库已同步统一微服务运行时、服务级消息边界和旧表停用策略，未将历史方案的过渡状态误写为当前运行时。
 - 统一订单取消事件名称为 `order.cancelled.v1`，保留旧拼写的代码别名但不增加新的事件类型。
-- Gateway 的 `/api/v1/products`、`/api/v1/products/:id` 已切换到 Catalog gRPC；其他 `/api/v1` 路由通过 NoRoute 保留 Commerce 过渡代理。
-- `/api/v1/seckill/orders` 已切换到 Order gRPC 并只调用一次 Inventory；旧 `/order` 保留旧 Commerce/Product/Redis/MQ 兼容链路。
+- Gateway 的 `/api/v1/products`、`/api/v1/products/:id` 由 Catalog gRPC 提供，其他 `/api/v1` 路由同样显式调用目标服务。
+- Inventory Stream 出站事件使用 pending claim 重放，入站取消/退款事件使用 Redis Inbox 租约与已处理标记；MQ 未配置时服务安全降级，不连接任何旧队列。
 
 ## [0.1.0] - 2026-08-05
 

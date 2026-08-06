@@ -1,42 +1,19 @@
-# Messaging Workers
+# Messaging
 
 ## 目的
-维护旧秒杀链路的可靠消息投递与死信补偿，并为新商城事件演进提供 Outbox/Inbox 模型。
+为统一商城提供服务级 Outbox/Inbox、RabbitMQ Topic、重试/DLQ 和 Fake/Memory 验收能力。
 
-## 模块概述
-- **职责:** 旧 `outbox_events` 扫描、publisher confirm、主队列消费、DLQ 和 Redis 补偿；维护新商城跨服务事件契约和后续 Outbox/Inbox 运行时。
-- **状态:** 🚧迁移中，第一阶段契约已完成
-- **最后更新:** 2026-08-06
+## 当前实现
+- `common/contracts` 定义 `EventEnvelope`、事件 payload、事件版本和服务所有权。
+- Order、Payment、Fulfillment 使用各自 SQL Outbox/Inbox 表；状态变更和事件在同一 MySQL 事务中追加。
+- Inventory 使用 Redis Lua 在库存/reservation 状态变更的同一脚本中 `XADD` Stream Outbox；无 Redis 时使用 MemoryEventStream。
+- RabbitMQ 使用 `commerce.events.v1`、retry exchange、DLX、服务独立队列、Publisher Confirm、mandatory return、手动 Ack 和有限重试。
+- `(consumer,event_id)` Inbox claim 保证重复投递收敛；未知事件和未来版本安全确认并隔离。
 
-## 规范
+## 事件
+`seckill.accepted.v1`、`order.created.v1`、`order.cancelled.v1`、`payment.succeeded.v1`、`payment.refunded.v1`、`inventory.reserved.v1`、`inventory.released.v1`、`inventory.restocked.v1`、`shipment.created.v1`、`shipment.delivered.v1`。
 
-### 需求: 旧订单消息可靠处理
-**模块:** Messaging Workers
-
-#### 场景: 发布或消费失败
-- 发布失败按退避策略重试，达到上限后执行补偿。
-- 消费失败进入死信队列，由 DLQ Consumer 判断旧订单状态后补偿 Redis。
-
-### 需求: 新商城事件幂等基础
-**模块:** Commerce Messaging
-
-#### 场景: 商城状态事务提交
-- 与业务状态同事务写入 `commerce_outbox_events`。
-- 事件包含确定性 `event_id`、`event_type`、`event_version` 和 JSON payload。
-- `inbox_events` 使用 `(consumer, event_id)` 唯一约束预留消费幂等边界。
-
-## 依赖
-- MySQL、Redis、RabbitMQ、OpenTelemetry、Prometheus。
-
-## 当前边界
-- 现有 Outbox Worker 只扫描旧 `outbox_events`，尚未发布 `commerce_outbox_events`。
-- 旧 MQ Consumer 仍在一个事务内写旧 `orders` 与 `product` 表；新商城表不受该跨写影响。
-- `common/contracts` 已定义统一事件信封、版本化事件类型、服务标识和数据所有权；订单取消事件的规范名称为 `order.cancelled.v1`，兼容代码别名不会产生第二种线上事件类型。
-- `EventType` 是事件路由和主版本标识，`EventVersion` 是同一事件的 Payload/信封演进版本；信封层接受正数未来版本，消费者必须按支持能力处理、忽略或隔离未知版本。
-- 事件发布必须使用 `common/contracts.NewEventEnvelope`，不得在业务服务中复制事件字符串或自行拼接事件信封。
-- `proto/commerce` 已定义 Catalog、Inventory、Identity、Cart、Order、Payment、Fulfillment 的内部 gRPC 契约，对应服务仍按阶段拆分。
-- Catalog/Inventory 本阶段启动时通过 `ServiceBoundaryFor` 和 `ValidateServiceBoundaries` 接入共享边界，但尚未发布新的跨服务业务事件；订单完整切换前不允许借 RabbitMQ 旁路重复扣库存。
-- 发布失败、重复消息和 DLQ 的真实集成验收需要 RabbitMQ/Redis/MySQL 环境。
-
-## 变更历史
-- [202608051526_backend_commerce_mvp](../../history/2026-08/202608051526_backend_commerce_mvp/) - 增加版本化 Commerce Outbox 和 Inbox 表。
+## 运行边界
+- `SECKILL_MQ_URL` 为空时不连接 RabbitMQ；服务仍可记录 Memory Outbox 并运行 Memory/Fake 测试。
+- 旧 `orders`、`product`、`outbox_events` 和旧 Worker 不属于新消息运行时。
+- RabbitMQ 真实故障注入需要 Docker；`tests/stage5_rabbitmq_e2e.sh` 会在基础设施不可用时明确跳过。

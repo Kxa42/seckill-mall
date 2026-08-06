@@ -6,8 +6,6 @@ info:
 servers:
   - url: http://127.0.0.1:8080/api/v1
     description: API Gateway
-  - url: http://127.0.0.1:8081/api/v1
-    description: Commerce API 迁移期兼容直连，仅用于尚未拆分的回退接口
 tags:
   - name: Auth
   - name: Address

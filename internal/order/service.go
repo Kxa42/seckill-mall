@@ -314,6 +314,38 @@ func (s *Service) ConfirmReceipt(ctx context.Context, userID uint64, orderID str
 	return s.repository.Transition(ctx, strings.TrimSpace(orderID), userID, StatusCompleted, "用户确认收货", "user", userID, s.now())
 }
 
+// ApplyShipmentCreated 只应用履约事实，不反向调用 Fulfillment，避免事件回环。
+func (s *Service) ApplyShipmentCreated(ctx context.Context, orderID, carrier, trackingNo string) error {
+	value, err := s.repository.Get(ctx, 0, strings.TrimSpace(orderID))
+	if err != nil {
+		return err
+	}
+	if value.Status == StatusShipped || value.Status == StatusCompleted {
+		return nil
+	}
+	if value.Status != StatusPaid {
+		return NewError(CodeInvalidTransition, "订单尚未支付，不能应用发货事实", nil)
+	}
+	_, err = s.repository.Transition(ctx, value.OrderID, 0, StatusShipped, fmt.Sprintf("履约发货 %s/%s", strings.TrimSpace(carrier), strings.TrimSpace(trackingNo)), "fulfillment", 0, s.now())
+	return err
+}
+
+// ApplyShipmentDelivered 只应用履约收货事实，不调用履约服务。
+func (s *Service) ApplyShipmentDelivered(ctx context.Context, orderID string) error {
+	value, err := s.repository.Get(ctx, 0, strings.TrimSpace(orderID))
+	if err != nil {
+		return err
+	}
+	if value.Status == StatusCompleted {
+		return nil
+	}
+	if value.Status != StatusShipped {
+		return NewError(CodeInvalidTransition, "订单尚未发货，不能应用收货事实", nil)
+	}
+	_, err = s.repository.Transition(ctx, value.OrderID, 0, StatusCompleted, "履约已收货", "fulfillment", 0, s.now())
+	return err
+}
+
 // Refund 将订单置为已退款。退款单和退款渠道仍由过渡 Payment 模块保存。
 func (s *Service) Refund(ctx context.Context, userID uint64, orderID, refundNo, reason string) (Order, error) {
 	if userID == 0 || strings.TrimSpace(orderID) == "" || strings.TrimSpace(refundNo) == "" || strings.TrimSpace(reason) == "" {

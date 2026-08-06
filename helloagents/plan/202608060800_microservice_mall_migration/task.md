@@ -40,18 +40,27 @@
 
 ## 5. 阶段5：Outbox/Inbox 与 RabbitMQ
 
-- [ ] 5.1 为各服务增加本地 Outbox Publisher 和统一事件信封。
-- [ ] 5.2 增加 Order、Payment、Inventory、Fulfillment 消费者和 Inbox 唯一约束。
-- [ ] 5.3 将秒杀准入、支付成功、取消、释放、发货和退款接入 RabbitMQ。
-- [ ] 5.4 增加发布重试、publisher confirm、手动 Ack、DLQ 和补偿逻辑。
-- [ ] 5.5 阶段验收：重复消息、服务宕机、发布失败、DLQ 和恢复后重放。
+- [√] 5.1 为各服务增加本地 Outbox Publisher 和统一事件信封。
+  > 备注: Order、Payment、Fulfillment 使用服务级 SQL Outbox；Inventory 使用 Redis Lua 原子 Stream Outbox，并由 `common/messaging` 统一发布。
+- [√] 5.2 增加 Order、Payment、Inventory、Fulfillment 消费者和 Inbox 唯一约束。
+  > 备注: Order、Payment、Fulfillment 使用独立 Inbox 表；Inventory 使用 `inventory:inbox:<consumer>:<event_id>` Redis 租约键和已处理标记。
+- [√] 5.3 将秒杀准入、支付成功、取消、释放、发货和退款接入 RabbitMQ。
+  > 备注: 统一使用 `commerce.events.v1` Topic；Inventory Redis Stream 出站事件由 `inventory-publisher` consumer group 桥接到 RabbitMQ。
+- [√] 5.4 增加发布重试、publisher confirm、手动 Ack、DLQ 和补偿逻辑。
+  > 备注: RabbitMQ Publisher 使用 confirm/mandatory，Consumer 使用手动 Ack、有限 retry/DLQ；领域消费者调用现有幂等状态机完成补偿和恢复。
+- [√] 5.5 阶段验收：重复消息、服务宕机、发布失败、DLQ 和恢复后重放。
+  > 备注: Memory/Fake、race、vet、Compose 静态解析和旧入口 404 验收通过；真实 RabbitMQ 故障注入、Compose 启动和 migration 因 Docker daemon 不可用跳过，入口为 `tests/stage5_rabbitmq_e2e.sh`。
 
 ## 6. 阶段6：Gateway、部署与收口
 
-- [ ] 6.1 Gateway 按 `/api/v1` 领域路由调用目标服务，不再代理 `commerce-api` 业务 Repository。
-- [ ] 6.2 逐步下线旧 `/order`、旧 `orders/product` 跨表 MQ Consumer 和重复表写入。
-- [ ] 6.3 更新 Docker Compose、migration、OpenAPI、README 和知识库架构图。
-- [ ] 6.4 完成全部自动化测试、静态检查和可用 Docker 环境下的真实集成验收。
+- [√] 6.1 Gateway 按 `/api/v1` 领域路由调用目标服务，不再代理 `commerce-api` 业务 Repository。
+  > 备注: 已移除 Commerce NoRoute 代理和旧 Product/Order 客户端，未注册路径直接返回 404。
+- [√] 6.2 逐步下线旧 `/order`、旧 `orders/product` 跨表 MQ Consumer 和重复表写入。
+  > 备注: 旧 HTTP 入口、旧服务、旧 Worker 和旧 protobuf 已从构建/Compose 移除；旧数据库表仅保留历史数据，不再读写。
+- [√] 6.3 更新 Docker Compose、migration、OpenAPI、README 和知识库架构图。
+  > 备注: 已增加阶段5消息 migration、统一 RabbitMQ 拓扑、服务级 Outbox/Inbox 说明和启动/验收入口。
+- [√] 6.4 完成全部自动化测试、静态检查和可用 Docker 环境下的真实集成验收。
+  > 备注: 自动化测试、race、vet、格式和 Compose 静态检查通过；真实 Docker 集成按 6.5 记录跳过。
 - [√] 6.5 记录 Docker 不可用时被跳过的项目和后续验收入口。
   > 备注: 当前已记录真实 migration、Redis/etcd/RabbitMQ、Compose 启动和真实 gRPC E2E 的跳过原因及替代验收入口。
 
@@ -59,7 +68,7 @@
 
 - [√] 7.1 检查服务端授权、PII/Token/支付签名日志、配置密钥和事件 payload。
 - [√] 7.2 检查跨服务调用 deadline、幂等键、重试上限、DLQ 毒丸消息和库存补偿。
-  > 备注: 阶段 4 已完成同步 gRPC 路径的授权、deadline、幂等和恢复检查；RabbitMQ/DLQ 运行时检查仍属于阶段 5。
+  > 备注: 已完成同步 gRPC 与 RabbitMQ Consumer 的 deadline、幂等、有限重试、DLQ 和库存补偿检查；真实 broker 故障注入因 Docker 不可用跳过。
 
 ## 8. 文档更新
 

@@ -22,28 +22,30 @@ const (
 )
 
 const (
-	EventSeckillAccepted   = "seckill.accepted.v1"
-	EventOrderCreated      = "order.created.v1"
-	EventOrderCancelled    = "order.cancelled.v1"
-	EventOrderCanceled     = EventOrderCancelled // 保留美式拼写别名，避免契约包升级时破坏调用方。
-	EventPaymentSucceeded  = "payment.succeeded.v1"
-	EventPaymentRefunded   = "payment.refunded.v1"
-	EventInventoryReserved = "inventory.reserved.v1"
-	EventInventoryReleased = "inventory.released.v1"
-	EventShipmentCreated   = "shipment.created.v1"
-	EventShipmentDelivered = "shipment.delivered.v1"
+	EventSeckillAccepted    = "seckill.accepted.v1"
+	EventOrderCreated       = "order.created.v1"
+	EventOrderCancelled     = "order.cancelled.v1"
+	EventOrderCanceled      = EventOrderCancelled // 保留美式拼写别名，避免契约包升级时破坏调用方。
+	EventPaymentSucceeded   = "payment.succeeded.v1"
+	EventPaymentRefunded    = "payment.refunded.v1"
+	EventInventoryReserved  = "inventory.reserved.v1"
+	EventInventoryReleased  = "inventory.released.v1"
+	EventInventoryRestocked = "inventory.restocked.v1"
+	EventShipmentCreated    = "shipment.created.v1"
+	EventShipmentDelivered  = "shipment.delivered.v1"
 )
 
 var knownEventTypes = map[string]struct{}{
-	EventSeckillAccepted:   {},
-	EventOrderCreated:      {},
-	EventOrderCancelled:    {},
-	EventPaymentSucceeded:  {},
-	EventPaymentRefunded:   {},
-	EventInventoryReserved: {},
-	EventInventoryReleased: {},
-	EventShipmentCreated:   {},
-	EventShipmentDelivered: {},
+	EventSeckillAccepted:    {},
+	EventOrderCreated:       {},
+	EventOrderCancelled:     {},
+	EventPaymentSucceeded:   {},
+	EventPaymentRefunded:    {},
+	EventInventoryReserved:  {},
+	EventInventoryReleased:  {},
+	EventInventoryRestocked: {},
+	EventShipmentCreated:    {},
+	EventShipmentDelivered:  {},
 }
 
 // EventEnvelope 是 RabbitMQ 事件的稳定外层格式。Payload 保持 JSON，便于事件版本独立演进。

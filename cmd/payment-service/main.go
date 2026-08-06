@@ -11,6 +11,7 @@ import (
 	"os/signal"
 	"strings"
 	"syscall"
+	"time"
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
@@ -23,6 +24,7 @@ import (
 	"seckill-mall/common/contracts"
 	"seckill-mall/common/discovery"
 	"seckill-mall/common/internalcall"
+	"seckill-mall/common/messaging"
 	"seckill-mall/common/orderclient"
 	"seckill-mall/common/pb"
 	"seckill-mall/payment_service"
@@ -45,6 +47,7 @@ func main() {
 		port = "51006"
 	}
 	repository := buildRepository()
+	messagingRuntime := configureMessaging(repository)
 	connection, err := grpc.Dial(config.Conf.Order.Address, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
 		log.Fatalf("payment order dial failed: %v", err)
@@ -67,9 +70,20 @@ func main() {
 	registerHealth(grpcServer, "commerce.payment.v1.PaymentService")
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
+	if messagingRuntime.publisher != nil {
+		defer func() { _ = messagingRuntime.publisher.Close() }()
+	}
 	registration := registerService(ctx, contracts.ServicePayment, config.Conf.Payment.Address, port)
 	if registration != nil {
 		defer func() { _ = registration.Close(context.Background()) }()
+	}
+	if messagingRuntime.publisher != nil {
+		go messaging.RunOutboxPublisher(ctx, messagingRuntime.outbox, messagingRuntime.publisher, time.Second, 100)
+		handler, handlerErr := paymentservice.NewEventHandler(service)
+		if handlerErr != nil {
+			log.Fatalf("payment event handler create failed: %v", handlerErr)
+		}
+		go messaging.RunRabbitConsumer(ctx, config.Conf.MQ.URL, contracts.ServicePayment, messagingRuntime.inbox, handler.Handlers(), 5)
 	}
 	log.Printf("payment service started addr=%s repository=%s", listener.Addr(), repositoryName(repository))
 	serveWithShutdown(ctx, grpcServer, listener)
@@ -145,4 +159,35 @@ func serveWithShutdown(ctx context.Context, server *grpc.Server, listener net.Li
 			log.Printf("payment service graceful stop: %v", err)
 		}
 	}
+}
+
+type messageRuntime struct {
+	outbox    messaging.OutboxStore
+	inbox     messaging.InboxStore
+	publisher *messaging.RabbitPublisher
+}
+
+func configureMessaging(repository paymentservice.Repository) messageRuntime {
+	var outbox messaging.OutboxStore
+	var inbox messaging.InboxStore
+	switch value := repository.(type) {
+	case *paymentservice.MemoryRepository:
+		store := messaging.NewMemoryStore()
+		value.SetEventSink(store)
+		outbox, inbox = store.Outbox(), store.Inbox()
+	case *paymentservice.MySQLRepository:
+		store, err := messaging.NewSQLStore(value.Database(), "payment_outbox_events", "payment_inbox_events")
+		if err != nil {
+			log.Fatalf("payment message store create failed: %v", err)
+		}
+		value.SetEventSink(store)
+		outbox, inbox = store.Outbox(), store.Inbox()
+	default:
+		return messageRuntime{}
+	}
+	runtime := messageRuntime{outbox: outbox, inbox: inbox}
+	if strings.TrimSpace(config.Conf.MQ.URL) != "" {
+		runtime.publisher = messaging.NewRabbitPublisher(config.Conf.MQ.URL)
+	}
+	return runtime
 }

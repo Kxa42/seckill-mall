@@ -13,9 +13,12 @@ import (
 	"sync"
 	"time"
 
+	amqp "github.com/rabbitmq/amqp091-go"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 
+	"seckill-mall/common/contracts"
+	"seckill-mall/common/messaging"
 	"seckill-mall/common/orderclient"
 )
 
@@ -207,11 +210,15 @@ type MemoryRepository struct {
 	callbacks      map[string]string
 	refunds        map[string]Refund
 	refundByOrder  map[string]string
+	eventSink      messaging.EventSink
 }
 
 func NewMemoryRepository() *MemoryRepository {
 	return &MemoryRepository{next: 1, payments: make(map[string]Payment), paymentByOrder: make(map[string]string), callbacks: make(map[string]string), refunds: make(map[string]Refund), refundByOrder: make(map[string]string)}
 }
+
+// SetEventSink 注入 Payment 自有 Outbox。
+func (r *MemoryRepository) SetEventSink(sink messaging.EventSink) { r.eventSink = sink }
 func (r *MemoryRepository) Create(_ context.Context, value Payment, _ time.Time) (Payment, bool, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -247,6 +254,15 @@ func (r *MemoryRepository) MarkSucceeded(_ context.Context, paymentNo, callbackR
 		}
 		return value, true, nil
 	}
+	if r.eventSink != nil {
+		event, err := paymentSucceededEvent(value, callbackRef, now)
+		if err != nil {
+			return Payment{}, false, err
+		}
+		if err := r.eventSink.AppendEvent(context.Background(), event, nil); err != nil {
+			return Payment{}, false, err
+		}
+	}
 	value.Status, value.CallbackRef, value.PaidAt, value.UpdatedAt = StatusSucceeded, callbackRef, now, now
 	r.payments[paymentNo] = value
 	r.callbacks[callbackRef] = paymentNo
@@ -280,12 +296,24 @@ func (r *MemoryRepository) CreateRefund(_ context.Context, value Refund, _ time.
 	if no, ok := r.refundByOrder[value.OrderID]; ok {
 		return r.refunds[no], true, nil
 	}
+	if r.eventSink != nil {
+		event, err := messaging.NewEvent(fmt.Sprintf("payment.refunded:%s", value.RefundNo), contracts.EventPaymentRefunded, "order", value.OrderID, contracts.PaymentRefundedPayload{RefundNo: value.RefundNo, PaymentNo: value.PaymentNo, OrderID: value.OrderID, UserID: value.UserID, AmountCents: value.AmountCents, Reason: value.Reason}, value.CreatedAt)
+		if err != nil {
+			return Refund{}, false, err
+		}
+		if err := r.eventSink.AppendEvent(context.Background(), event, nil); err != nil {
+			return Refund{}, false, err
+		}
+	}
 	r.refunds[value.RefundNo] = value
 	r.refundByOrder[value.OrderID] = value.RefundNo
 	return value, false, nil
 }
 
-type MySQLRepository struct{ db *gorm.DB }
+type MySQLRepository struct {
+	db        *gorm.DB
+	eventSink messaging.EventSink
+}
 type paymentRecord struct {
 	ID          uint64 `gorm:"column:id;primaryKey"`
 	PaymentNo   string `gorm:"column:payment_no"`
@@ -321,6 +349,12 @@ func NewMySQLRepository(db *gorm.DB) (*MySQLRepository, error) {
 	}
 	return &MySQLRepository{db: db}, nil
 }
+
+// SetEventSink 注入 Payment 自有 SQL Outbox。
+func (r *MySQLRepository) SetEventSink(sink messaging.EventSink) { r.eventSink = sink }
+
+// Database 供服务启动装配本服务消息表。
+func (r *MySQLRepository) Database() *gorm.DB { return r.db }
 func paymentFromRecord(v paymentRecord) Payment {
 	var callback string
 	if v.CallbackRef != nil {
@@ -404,6 +438,21 @@ func (r *MySQLRepository) MarkSucceeded(ctx context.Context, paymentNo, callback
 			}
 			return err
 		}
+		if r.eventSink != nil {
+			event, err := paymentSucceededEvent(paymentFromRecord(record), callbackRef, now)
+			if err != nil {
+				return err
+			}
+			if transactional, ok := r.eventSink.(interface {
+				AppendTx(context.Context, *gorm.DB, contracts.EventEnvelope, amqp.Table) error
+			}); ok {
+				if err := transactional.AppendTx(ctx, tx, event, nil); err != nil {
+					return err
+				}
+			} else if err := r.eventSink.AppendEvent(ctx, event, nil); err != nil {
+				return err
+			}
+		}
 		result = paymentFromRecord(record)
 		return nil
 	})
@@ -455,6 +504,21 @@ func (r *MySQLRepository) CreateRefund(ctx context.Context, value Refund, now ti
 		if err := tx.Create(&record).Error; err != nil {
 			return err
 		}
+		if r.eventSink != nil {
+			event, err := messaging.NewEvent(fmt.Sprintf("payment.refunded:%s", value.RefundNo), contracts.EventPaymentRefunded, "order", value.OrderID, contracts.PaymentRefundedPayload{RefundNo: value.RefundNo, PaymentNo: value.PaymentNo, OrderID: value.OrderID, UserID: value.UserID, AmountCents: value.AmountCents, Reason: value.Reason}, now)
+			if err != nil {
+				return err
+			}
+			if transactional, ok := r.eventSink.(interface {
+				AppendTx(context.Context, *gorm.DB, contracts.EventEnvelope, amqp.Table) error
+			}); ok {
+				if err := transactional.AppendTx(ctx, tx, event, nil); err != nil {
+					return err
+				}
+			} else if err := r.eventSink.AppendEvent(ctx, event, nil); err != nil {
+				return err
+			}
+		}
 		result = refundFromRecord(record)
 		result.UserID = value.UserID
 		return nil
@@ -469,6 +533,10 @@ func (r *MySQLRepository) CreateRefund(ctx context.Context, value Refund, now ti
 		return result, true, nil
 	}
 	return result, reused, err
+}
+
+func paymentSucceededEvent(value Payment, callbackRef string, now time.Time) (contracts.EventEnvelope, error) {
+	return messaging.NewEvent(fmt.Sprintf("payment.succeeded:%s", value.PaymentNo), contracts.EventPaymentSucceeded, "order", value.OrderID, contracts.PaymentSucceededPayload{PaymentNo: value.PaymentNo, OrderID: value.OrderID, UserID: value.UserID, AmountCents: value.AmountCents, CallbackRef: callbackRef}, now)
 }
 
 var _ Repository = (*MemoryRepository)(nil)

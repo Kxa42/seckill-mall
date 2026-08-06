@@ -18,7 +18,6 @@ type Config struct {
 	Etcd        EtcdConfig        `mapstructure:"etcd"`
 	Seckill     SeckillConfig     `mapstructure:"seckill"`
 	JWT         JWTConfig         `mapstructure:"jwt"`
-	Commerce    CommerceConfig    `mapstructure:"commerce"`
 	Catalog     CatalogConfig     `mapstructure:"catalog"`
 	Inventory   InventoryConfig   `mapstructure:"inventory"`
 	Identity    IdentityConfig    `mapstructure:"identity"`
@@ -60,10 +59,6 @@ type SeckillConfig struct {
 type JWTConfig struct {
 	Expire string `mapstructure:"expire"` //对应 yaml 里的 "24h"
 	Secret string `mapstructure:"secret"`
-}
-
-type CommerceConfig struct {
-	URL string `mapstructure:"url"`
 }
 
 // CatalogConfig 描述 Catalog 服务自身或 Gateway 的服务发现目标。
@@ -198,9 +193,6 @@ func applyEnvOverrides() {
 		Conf.MQ.URL = mqURL
 	}
 
-	if commerceURL := os.Getenv("SECKILL_COMMERCE_URL"); commerceURL != "" {
-		Conf.Commerce.URL = commerceURL
-	}
 	if serviceName := os.Getenv("SECKILL_CATALOG_SERVICE"); serviceName != "" {
 		Conf.Catalog.ServiceName = serviceName
 	}

@@ -4,14 +4,23 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"time"
+
+	amqp "github.com/rabbitmq/amqp091-go"
+
+	"seckill-mall/common/contracts"
+	"seckill-mall/common/messaging"
 
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 )
 
 // MySQLRepository 只访问 commerce_orders、order_items、order_status_history 和 Order 操作表。
-type MySQLRepository struct{ db *gorm.DB }
+type MySQLRepository struct {
+	db        *gorm.DB
+	eventSink messaging.EventSink
+}
 
 type orderRecord struct {
 	ID               uint64 `gorm:"column:id;primaryKey"`
@@ -32,6 +41,12 @@ type orderRecord struct {
 	CreatedAt        time.Time
 	UpdatedAt        time.Time
 }
+
+// SetEventSink 注入 Order 自有 SQL Outbox。
+func (r *MySQLRepository) SetEventSink(sink messaging.EventSink) { r.eventSink = sink }
+
+// Database 供服务启动装配本服务消息表，调用方不得访问其他服务表。
+func (r *MySQLRepository) Database() *gorm.DB { return r.db }
 
 func (orderRecord) TableName() string { return "commerce_orders" }
 
@@ -188,6 +203,21 @@ func (r *MySQLRepository) Create(ctx context.Context, value Order) (Order, bool,
 				return err
 			}
 		}
+		if r.eventSink != nil {
+			event, err := messaging.NewEvent(fmt.Sprintf("order.created:%s", value.OrderID), contracts.EventOrderCreated, "order", value.OrderID, contracts.OrderCreatedPayload{OrderID: value.OrderID, UserID: value.UserID, OrderType: value.OrderType, TotalAmountCents: value.TotalAmountCents, Items: orderItemPayloads(value.Items)}, value.CreatedAt)
+			if err != nil {
+				return err
+			}
+			if transactional, ok := r.eventSink.(interface {
+				AppendTx(context.Context, *gorm.DB, contracts.EventEnvelope, amqp.Table) error
+			}); ok {
+				if err := transactional.AppendTx(ctx, tx, event, nil); err != nil {
+					return err
+				}
+			} else if err := r.eventSink.AppendEvent(ctx, event, nil); err != nil {
+				return err
+			}
+		}
 		created = value
 		return nil
 	})
@@ -272,6 +302,29 @@ func (r *MySQLRepository) Transition(ctx context.Context, orderID string, userID
 		}
 		if err := tx.Create(&statusRecord{OrderID: orderID, FromStatus: record.Status, ToStatus: target, Reason: reason, ActorType: actorType, ActorID: actorID, CreatedAt: now}).Error; err != nil {
 			return err
+		}
+		if target == StatusCanceled && r.eventSink != nil {
+			value, err := r.loadOrder(tx, record.UserID, orderID)
+			if err != nil {
+				return err
+			}
+			reservationIDs := make([]string, 0, len(value.Items))
+			for _, item := range value.Items {
+				reservationIDs = append(reservationIDs, item.ReservationID)
+			}
+			event, err := messaging.NewEvent(fmt.Sprintf("order.cancelled:%s", orderID), contracts.EventOrderCancelled, "order", orderID, contracts.OrderCancelledPayload{OrderID: orderID, UserID: record.UserID, Reason: reason, ReservationIDs: reservationIDs}, now)
+			if err != nil {
+				return err
+			}
+			if transactional, ok := r.eventSink.(interface {
+				AppendTx(context.Context, *gorm.DB, contracts.EventEnvelope, amqp.Table) error
+			}); ok {
+				if err := transactional.AppendTx(ctx, tx, event, nil); err != nil {
+					return err
+				}
+			} else if err := r.eventSink.AppendEvent(ctx, event, nil); err != nil {
+				return err
+			}
 		}
 		var err error
 		result, err = r.loadOrder(tx, record.UserID, orderID)

@@ -20,8 +20,6 @@ import (
 )
 
 type grpcClients struct {
-	product       pb.ProductServiceClient
-	order         pb.OrderServiceClient
 	commerceOrder pb.CommerceOrderServiceClient
 	catalog       pb.CatalogServiceClient
 	inventory     pb.InventoryServiceClient
@@ -46,8 +44,6 @@ func initGRPCClients() grpcClients {
 		etcdResolver = builtResolver
 	}
 
-	productConn := dialService("product", "", etcdResolver)
-	orderConn := dialService("order", "", etcdResolver)
 	catalogName := config.Conf.Catalog.ServiceName
 	if catalogName == "" {
 		catalogName = contracts.ServiceCatalog
@@ -85,8 +81,6 @@ func initGRPCClients() grpcClients {
 	fulfillmentConn := dialService(fulfillmentName, config.Conf.Fulfillment.Address, etcdResolver)
 
 	return grpcClients{
-		product:       pb.NewProductServiceClient(productConn),
-		order:         pb.NewOrderServiceClient(orderConn),
 		commerceOrder: pb.NewCommerceOrderServiceClient(commerceOrderConn),
 		catalog:       pb.NewCatalogServiceClient(catalogConn),
 		inventory:     pb.NewInventoryServiceClient(inventoryConn),
