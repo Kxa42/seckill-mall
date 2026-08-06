@@ -5,7 +5,7 @@
 ## 1. 项目概述
 
 ### 目标与背景
-项目在原有高并发秒杀、Outbox、死信补偿和可观测能力之上，新增可独立运行的完整商城后端 MVP。新 API 覆盖身份、地址、商品目录、购物车、结算、统一订单、Mock 支付、履约和退款。
+项目在原有高并发秒杀、Outbox、死信补偿和可观测能力之上，正在将完整商城后端 MVP 渐进式迁移为统一微服务架构。新 API 覆盖身份、地址、商品目录、购物车、结算、统一订单、Mock 支付、履约和退款。
 
 ### 范围
 - **当前范围内:** `/api/v1` 商城 API、旧秒杀兼容 API、MySQL 持久化、内存验收模式、版本化 migration、容器编排和可观测性。
@@ -18,11 +18,17 @@
 
 | 模块名称 | 职责 | 状态 | 文档 |
 |---------|------|------|------|
-| Commerce API | 身份、地址、目录、购物车、订单、支付、履约与退款 | 🚧 MVP已实现 | [commerce](modules/commerce.md) |
+| Commerce API | 迁移期间的商城过渡适配层 | 🚧 迁移中 | [commerce](modules/commerce.md) |
+| Identity Service | 用户、Token 和地址 | 📝 计划拆分 | [commerce](modules/commerce.md) |
+| Catalog Service | 分类、SPU、SKU 和商品快照 | 📝 计划拆分 | [commerce](modules/commerce.md) |
+| Inventory/Seckill Service | 库存预占、Redis Lua 和秒杀准入 | 📝 计划拆分 | [product](modules/product.md) |
+| Cart Service | 购物车和结算预览 | 📝 计划拆分 | [commerce](modules/commerce.md) |
+| Payment Service | 支付回调和退款 | 📝 计划拆分 | [commerce](modules/commerce.md) |
+| Fulfillment Service | 发货、物流和收货 | 📝 计划拆分 | [commerce](modules/commerce.md) |
 | API Gateway | `/api/v1` 反向代理、旧接口兼容、限流和追踪 | ✅稳定 | [gateway](modules/gateway.md) |
 | Product Service | 旧秒杀商品读取、Redis 库存和限购 | ✅兼容 | [product](modules/product.md) |
 | Order Service | 旧秒杀下单编排、排队订单与 Outbox | ✅兼容 | [order](modules/order.md) |
-| Messaging Workers | 旧链路 Outbox 发布、主队列消费和死信补偿 | ✅兼容 | [messaging](modules/messaging.md) |
+| Messaging Workers | 旧链路消息处理和新商城事件契约 | 🚧 迁移中 | [messaging](modules/messaging.md) |
 | Platform | 配置、认证、响应、migration、Compose 和可观测性 | ✅稳定 | [platform](modules/platform.md) |
 
 ## 3. 快速链接

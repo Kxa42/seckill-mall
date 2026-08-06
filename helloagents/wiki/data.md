@@ -41,4 +41,5 @@ MySQL `seckill` 库同时承载新商城表和旧秒杀兼容表。新表由 `mi
 
 ## 当前边界
 - `commerce_outbox_events` 与 `inbox_events` 已建表，但现有 Outbox Worker 只处理旧 `outbox_events`。
+- 目标服务的数据集、同步依赖和事件边界以 `common/contracts/boundaries.go` 为代码契约；共享 MySQL 实例不等于允许跨服务写表。
 - 真实 MySQL migration 重放本轮因 Docker/数据库环境不可用未执行；SQL 文件、runner 单测和 Compose 配置已验证。

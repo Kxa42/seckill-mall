@@ -1,0 +1,22 @@
+syntax = "proto3";
+
+package commerce.cart.v1;
+
+option go_package = "seckill-mall/common/pb;pb";
+
+message CartListRequest {
+  uint64 user_id = 1;
+}
+
+message CartItem {
+  uint64 sku_id = 1;
+  int32 quantity = 2;
+}
+
+message CartListResponse {
+  repeated CartItem items = 1;
+}
+
+service CartService {
+  rpc List(CartListRequest) returns (CartListResponse);
+}

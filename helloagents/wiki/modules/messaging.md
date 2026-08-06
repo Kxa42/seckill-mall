@@ -4,9 +4,9 @@
 维护旧秒杀链路的可靠消息投递与死信补偿，并为新商城事件演进提供 Outbox/Inbox 模型。
 
 ## 模块概述
-- **职责:** 旧 `outbox_events` 扫描、publisher confirm、主队列消费、DLQ 和 Redis 补偿；新商城版本化事件持久化。
-- **状态:** 🚧兼容运行，商城消费者待接入
-- **最后更新:** 2026-08-05
+- **职责:** 旧 `outbox_events` 扫描、publisher confirm、主队列消费、DLQ 和 Redis 补偿；维护新商城跨服务事件契约和后续 Outbox/Inbox 运行时。
+- **状态:** 🚧迁移中，第一阶段契约已完成
+- **最后更新:** 2026-08-06
 
 ## 规范
 
@@ -31,6 +31,8 @@
 ## 当前边界
 - 现有 Outbox Worker 只扫描旧 `outbox_events`，尚未发布 `commerce_outbox_events`。
 - 旧 MQ Consumer 仍在一个事务内写旧 `orders` 与 `product` 表；新商城表不受该跨写影响。
+- `common/contracts` 已定义统一事件信封、版本化事件类型、服务标识和数据所有权；订单取消事件的规范名称为 `order.cancelled.v1`，兼容代码别名不会产生第二种线上事件类型。
+- `proto/commerce` 已定义 Catalog、Inventory、Identity、Cart、Order、Payment、Fulfillment 的内部 gRPC 契约，对应服务仍按阶段拆分。
 - 发布失败、重复消息和 DLQ 的真实集成验收需要 RabbitMQ/Redis/MySQL 环境。
 
 ## 变更历史

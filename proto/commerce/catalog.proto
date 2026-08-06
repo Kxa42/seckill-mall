@@ -1,0 +1,27 @@
+syntax = "proto3";
+
+package commerce.catalog.v1;
+
+option go_package = "seckill-mall/common/pb;pb";
+
+message CatalogGetSKUSnapshotRequest {
+  repeated uint64 sku_ids = 1;
+  bool include_inactive = 2;
+}
+
+message CatalogSKUSnapshot {
+  uint64 sku_id = 1;
+  uint64 spu_id = 2;
+  string sku_code = 3;
+  string sku_name = 4;
+  int64 price_cents = 5;
+  bool active = 6;
+}
+
+message CatalogGetSKUSnapshotResponse {
+  repeated CatalogSKUSnapshot items = 1;
+}
+
+service CatalogService {
+  rpc GetSKUSnapshot(CatalogGetSKUSnapshotRequest) returns (CatalogGetSKUSnapshotResponse);
+}

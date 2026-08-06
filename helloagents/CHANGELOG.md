@@ -6,6 +6,15 @@
 
 ## [Unreleased]
 
+### 新增
+- 建立商城微服务渐进式迁移方案，新增 Catalog、Inventory/Seckill、Identity、Cart、Order、Payment、Fulfillment 的版本化 gRPC 契约。
+- 新增 `common/contracts` 事件信封、事件类型、服务标识和独占数据所有权校验，覆盖后续 RabbitMQ Outbox/Inbox 迁移基线。
+- 新增 `config/commerce-services.example.yaml`，明确目标服务独立地址、DSN、RabbitMQ、etcd 和 Inventory Redis 配置约定。
+
+### 变更
+- 知识库明确新商城目标为统一微服务架构，当前仍处于契约基线阶段，未宣称服务拆分已完成。
+- 统一订单取消事件名称为 `order.cancelled.v1`，保留旧拼写的代码别名但不增加新的事件类型。
+
 ## [0.1.0] - 2026-08-05
 
 ### 新增

@@ -11,7 +11,9 @@
 - Outbox Worker：扫描待投递事件，可靠发布 RabbitMQ，并处理重试和最终补偿。
 - MQ Consumer：消费订单消息，使用 MySQL 事务推进订单状态并同步扣减 `product.stock`。
 - DLQ Consumer：消费死信队列，按订单状态补偿 Redis 库存和用户购买记录，并标记失败订单。
-- Common：公共配置、JWT 工具、链路追踪、protobuf 生成代码。
+- Common：公共配置、跨服务边界/事件契约、JWT 工具、链路追踪、protobuf 生成代码。
+
+当前正在执行商城微服务渐进式迁移：第一阶段已建立 `common/contracts` 事件契约和 `proto/commerce` 内部 gRPC 契约；`commerce-api` 尚未移除，后续将按 Catalog/Inventory、Order、Identity/Cart、Payment/Fulfillment 分阶段切换。
 
 商城前端当前明确暂缓，所有新增业务能力通过 `/api/v1` JSON API 和 OpenAPI 契约交付。
 
@@ -24,7 +26,8 @@
 - 新增 Mock 支付签名回调、支付幂等、运营发货、用户确认收货和未发货订单退款。
 - 新增统一秒杀订单入口 `POST /api/v1/seckill/orders`，进入与普通订单一致的待支付和履约状态机。
 - 新增版本化 SQL migration、完整业务容器、健康检查、优雅停机和 OpenAPI 文档。
-- 使用 gRPC + etcd 完成服务发现与服务间调用。
+- 新增商城微服务拆分的版本化 gRPC 契约和统一 RabbitMQ 事件信封基线；对应运行时服务将在后续阶段逐步接入。
+- 旧 Product/Order 链路使用 gRPC + etcd；新商城当前已完成版本化 gRPC 契约和服务边界基线，运行时服务发现与调用将在后续拆分阶段接入。
 - 使用 Redis + Lua 原子扣减秒杀库存，避免并发下重复读写导致超卖。
 - 支持用户限购记录，防止同一用户超过配置数量购买。
 - 对非法购买数量做了多层校验，`count <= 0` 会在 Gateway、Order Service、Product Service 被拒绝。
@@ -58,6 +61,13 @@ internal/
   commerce/        商城领域、应用服务、MySQL/内存 Repository
   commerce/httpapi 版本化 HTTP transport
   platform/        显式配置、认证、统一响应和 migration runner
+
+common/
+  contracts/       跨服务边界、数据所有权、事件信封和事件类型
+  pb/              protobuf 生成代码
+
+proto/
+  commerce/        新商城内部微服务 gRPC 契约
 
 api/
   openapi.yaml     `/api/v1` OpenAPI 3.0 契约
@@ -458,6 +468,9 @@ bash tests/e2e_memory.sh
 - `config/product.yaml`
 - `config/order.yaml`
 - `config/mq.yaml`
+- `config/commerce-services.example.yaml`（目标商城微服务配置基线）
+
+目标商城配置约定为每个业务服务独立的监听地址、MySQL DSN、RabbitMQ URL 和 etcd 地址；Inventory/Seckill 额外拥有 Redis 配置。Gateway 只配置 HTTP、服务发现和下游地址，不配置业务数据库 DSN。当前运行中的旧服务仍使用上述旧配置文件，拆分后按阶段迁移到目标约定。
 
 敏感配置建议通过环境变量注入：
 

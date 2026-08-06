@@ -1,0 +1,22 @@
+syntax = "proto3";
+
+package commerce.fulfillment.v1;
+
+option go_package = "seckill-mall/common/pb;pb";
+
+message FulfillmentShipRequest {
+  uint64 actor_id = 1;
+  string order_id = 2;
+  string carrier = 3;
+  string tracking_no = 4;
+}
+
+message FulfillmentShipResponse {
+  string shipment_id = 1;
+  string status = 2;
+  string message = 3;
+}
+
+service FulfillmentService {
+  rpc Ship(FulfillmentShipRequest) returns (FulfillmentShipResponse);
+}

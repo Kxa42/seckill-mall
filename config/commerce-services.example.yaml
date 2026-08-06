@@ -1,0 +1,61 @@
+# 商城目标微服务配置约定。
+# 这是服务拆分阶段的配置基线；敏感值必须通过环境变量或密钥管理系统注入。
+# 每个业务服务拥有独立监听地址、DSN、RabbitMQ 和 etcd 配置，禁止跨服务复用业务 DSN。
+
+services:
+  identity:
+    name: identity-service
+    address: 127.0.0.1:51001
+    mysql_dsn: "${IDENTITY_MYSQL_DSN}"
+    rabbitmq_url: "${IDENTITY_RABBITMQ_URL}"
+    etcd_addr: 127.0.0.1:2379
+
+  catalog:
+    name: catalog-service
+    address: 127.0.0.1:51002
+    mysql_dsn: "${CATALOG_MYSQL_DSN}"
+    rabbitmq_url: "${CATALOG_RABBITMQ_URL}"
+    etcd_addr: 127.0.0.1:2379
+
+  inventory:
+    name: inventory-service
+    address: 127.0.0.1:51003
+    mysql_dsn: "${INVENTORY_MYSQL_DSN}"
+    rabbitmq_url: "${INVENTORY_RABBITMQ_URL}"
+    etcd_addr: 127.0.0.1:2379
+    redis_addr: 127.0.0.1:6379
+    redis_db: 2
+
+  cart:
+    name: cart-service
+    address: 127.0.0.1:51004
+    mysql_dsn: "${CART_MYSQL_DSN}"
+    rabbitmq_url: "${CART_RABBITMQ_URL}"
+    etcd_addr: 127.0.0.1:2379
+
+  order:
+    name: order-service
+    address: 127.0.0.1:51005
+    mysql_dsn: "${ORDER_MYSQL_DSN}"
+    rabbitmq_url: "${ORDER_RABBITMQ_URL}"
+    etcd_addr: 127.0.0.1:2379
+
+  payment:
+    name: payment-service
+    address: 127.0.0.1:51006
+    mysql_dsn: "${PAYMENT_MYSQL_DSN}"
+    rabbitmq_url: "${PAYMENT_RABBITMQ_URL}"
+    etcd_addr: 127.0.0.1:2379
+
+  fulfillment:
+    name: fulfillment-service
+    address: 127.0.0.1:51007
+    mysql_dsn: "${FULFILLMENT_MYSQL_DSN}"
+    rabbitmq_url: "${FULFILLMENT_RABBITMQ_URL}"
+    etcd_addr: 127.0.0.1:2379
+
+gateway:
+  name: api-gateway
+  http_address: 127.0.0.1:8080
+  etcd_addr: 127.0.0.1:2379
+  # Gateway 只调用服务，不配置任何业务数据库 DSN。

@@ -1,0 +1,20 @@
+syntax = "proto3";
+
+package commerce.payment.v1;
+
+option go_package = "seckill-mall/common/pb;pb";
+
+message PaymentCreateRequest {
+  uint64 user_id = 1;
+  string order_id = 2;
+}
+
+message PaymentCreateResponse {
+  string payment_no = 1;
+  int64 amount_cents = 2;
+  string status = 3;
+}
+
+service PaymentService {
+  rpc Create(PaymentCreateRequest) returns (PaymentCreateResponse);
+}
