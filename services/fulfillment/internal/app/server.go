@@ -10,7 +10,6 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 
-	"seckill-mall/shared/clients/order"
 	"seckill-mall/shared/gen/commerce"
 	"seckill-mall/shared/platform/internalcall"
 )
@@ -63,9 +62,9 @@ func (s *Server) Get(ctx context.Context, req *pb.FulfillmentGetRequest) (*pb.Fu
 	if err != nil {
 		return nil, mapError(err)
 	}
-	return response(value, orderclient.Transition{OrderID: value.OrderID}, false), nil
+	return response(value, OrderTransition{OrderID: value.OrderID}, false), nil
 }
-func response(value Shipment, transition orderclient.Transition, reused bool) *pb.FulfillmentShipResponse {
+func response(value Shipment, transition OrderTransition, reused bool) *pb.FulfillmentShipResponse {
 	return &pb.FulfillmentShipResponse{ShipmentId: PublicID(value), Status: value.Status, Message: "履约状态已更新", OrderId: value.OrderID, Carrier: value.Carrier, TrackingNo: value.TrackingNo, OrderStatus: transition.Status, Reused: reused}
 }
 func mapError(err error) error {

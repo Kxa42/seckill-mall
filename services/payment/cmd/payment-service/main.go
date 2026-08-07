@@ -21,7 +21,6 @@ import (
 	"gorm.io/gorm"
 
 	"seckill-mall/services/payment/internal/app"
-	"seckill-mall/shared/clients/order"
 	"seckill-mall/shared/contracts"
 	"seckill-mall/shared/gen/commerce"
 	"seckill-mall/shared/platform/config"
@@ -53,7 +52,7 @@ func main() {
 		log.Fatalf("payment order dial failed: %v", err)
 	}
 	defer connection.Close()
-	service, err := paymentservice.NewService(repository, orderclient.NewGRPCClient(pb.NewCommerceOrderServiceClient(connection), os.Getenv("SECKILL_INTERNAL_CALL_SECRET")), secret)
+	service, err := paymentservice.NewService(repository, paymentservice.NewGRPCOrderClient(pb.NewCommerceOrderServiceClient(connection), os.Getenv("SECKILL_INTERNAL_CALL_SECRET")), secret)
 	if err != nil {
 		log.Fatalf("payment service create failed: %v", err)
 	}

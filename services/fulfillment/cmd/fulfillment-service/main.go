@@ -21,7 +21,6 @@ import (
 	"gorm.io/gorm"
 
 	"seckill-mall/services/fulfillment/internal/app"
-	"seckill-mall/shared/clients/order"
 	"seckill-mall/shared/contracts"
 	"seckill-mall/shared/gen/commerce"
 	"seckill-mall/shared/platform/config"
@@ -49,7 +48,7 @@ func main() {
 		log.Fatalf("fulfillment order dial failed: %v", err)
 	}
 	defer connection.Close()
-	service, err := fulfillmentservice.NewService(repository, orderclient.NewGRPCClient(pb.NewCommerceOrderServiceClient(connection), os.Getenv("SECKILL_INTERNAL_CALL_SECRET")))
+	service, err := fulfillmentservice.NewService(repository, fulfillmentservice.NewGRPCOrderClient(pb.NewCommerceOrderServiceClient(connection), os.Getenv("SECKILL_INTERNAL_CALL_SECRET")))
 	if err != nil {
 		log.Fatalf("fulfillment service create failed: %v", err)
 	}

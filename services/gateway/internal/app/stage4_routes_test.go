@@ -23,7 +23,6 @@ import (
 	inventoryservice "seckill-mall/services/inventory/testkit"
 	order "seckill-mall/services/order/testkit"
 	paymentservice "seckill-mall/services/payment/testkit"
-	"seckill-mall/shared/clients/order"
 	"seckill-mall/shared/gen/commerce"
 	platformauth "seckill-mall/shared/platform/auth"
 	"seckill-mall/shared/platform/config"
@@ -66,13 +65,14 @@ func TestStage4CommerceFlowUsesDomainServices(t *testing.T) {
 		t.Fatalf("order.NewService() error = %v", err)
 	}
 	orderServer, _ := order.NewGRPCServer(orderService)
-	orderClient := orderclient.NewGRPCClient(pb.NewCommerceOrderServiceClient(conn), internalSecret)
-	paymentService, err := paymentservice.NewService(paymentservice.NewMemoryRepository(), orderClient, strings.Repeat("p", 32))
+	paymentOrderClient := paymentservice.NewGRPCOrderClient(pb.NewCommerceOrderServiceClient(conn), internalSecret)
+	paymentService, err := paymentservice.NewService(paymentservice.NewMemoryRepository(), paymentOrderClient, strings.Repeat("p", 32))
 	if err != nil {
 		t.Fatalf("paymentservice.NewService() error = %v", err)
 	}
 	paymentServer, _ := paymentservice.NewServer(paymentService)
-	fulfillmentService, _ := fulfillmentservice.NewService(fulfillmentservice.NewMemoryRepository(), orderClient)
+	fulfillmentOrderClient := fulfillmentservice.NewGRPCOrderClient(pb.NewCommerceOrderServiceClient(conn), internalSecret)
+	fulfillmentService, _ := fulfillmentservice.NewService(fulfillmentservice.NewMemoryRepository(), fulfillmentOrderClient)
 	fulfillmentServer, _ := fulfillmentservice.NewServer(fulfillmentService)
 
 	pb.RegisterCatalogServiceServer(grpcServer, catalogServer)

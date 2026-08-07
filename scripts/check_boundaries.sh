@@ -27,4 +27,9 @@ if rg -n '"seckill-mall/services/[^/]+/testkit"' services shared tools \
   failed=1
 fi
 
+if rg -n '"seckill-mall/shared/clients/order"' services shared tools --glob '*.go'; then
+  printf 'Order 业务客户端必须归属消费者服务，不得回流 shared/clients/order\n'
+  failed=1
+fi
+
 exit "$failed"

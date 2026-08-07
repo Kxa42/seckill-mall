@@ -41,7 +41,7 @@ flowchart LR
 - `services/<service>/cmd` 保存服务进程入口和运行时组装。
 - `services/<service>/internal` 保存该服务私有的领域模型、Repository、服务实现和单元测试，Go 编译器阻止跨服务导入。
 - `services/<service>/etc` 保存服务本地配置；可选 `testkit` 仅向跨服务内存 E2E 暴露最小组装门面。
-- `shared/contracts`、`shared/proto`、`shared/gen` 和 `shared/clients` 保存显式跨服务协议与客户端。
+- `shared/contracts`、`shared/proto` 和 `shared/gen` 保存显式跨服务协议；业务客户端适配器归属调用方服务的 `internal/app`，不进入共享层。
 - `shared/platform` 保存配置、服务发现、内部认证、消息、迁移和可观测性能力，且不得反向依赖 `services`。
 - `tools` 保存仓库级工具；当前所有服务和工具共享根级 `go.mod`。
 - `migrations` 保持全局版本文件名稳定，因为文件名是 `schema_migrations.version` 的持久标识。
@@ -76,5 +76,6 @@ flowchart LR
 | ADR-003 | 旧表只停用不删除 | 2026-08-06 | ✅采纳 |
 | ADR-004 | 统一入口、服务实现、契约与平台层目录 | 2026-08-07 | ✅采纳 |
 | ADR-005 | 采用服务优先单仓库并保留单 Go module | 2026-08-07 | ✅采纳 |
+| ADR-006 | Order 客户端适配器归属消费者服务 | 2026-08-07 | ✅采纳 |
 
-目录分层设计见 [ADR-004](../history/2026-08/202608070731_repository_layout_refactor/how.md#adr-004-统一单仓库服务目录与平台层)；服务优先设计见 [ADR-005](../history/2026-08/202608070804_service_first_monorepo/how.md#adr-005-采用服务优先单仓库并保留单-go-module)。
+目录分层设计见 [ADR-004](../history/2026-08/202608070731_repository_layout_refactor/how.md#adr-004-统一单仓库服务目录与平台层)；服务优先设计见 [ADR-005](../history/2026-08/202608070804_service_first_monorepo/how.md#adr-005-采用服务优先单仓库并保留单-go-module)；客户端边界见 [ADR-006](../history/2026-08/202608070836_private_order_clients/how.md#adr-006-order-客户端适配器归属消费者服务)。

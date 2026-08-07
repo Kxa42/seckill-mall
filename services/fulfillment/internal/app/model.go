@@ -14,7 +14,6 @@ import (
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 
-	"seckill-mall/shared/clients/order"
 	"seckill-mall/shared/contracts"
 	"seckill-mall/shared/platform/messaging"
 )
@@ -50,54 +49,54 @@ type Repository interface {
 
 type Service struct {
 	repository Repository
-	orders     orderclient.Client
+	orders     OrderClient
 	now        func() time.Time
 }
 
-func NewService(repository Repository, orders orderclient.Client) (*Service, error) {
+func NewService(repository Repository, orders OrderClient) (*Service, error) {
 	if repository == nil || orders == nil {
 		return nil, errors.New("fulfillment repository and order client are required")
 	}
 	return &Service{repository: repository, orders: orders, now: time.Now}, nil
 }
 
-func (s *Service) Ship(ctx context.Context, actorID uint64, orderID, carrier, trackingNo string) (Shipment, orderclient.Transition, bool, error) {
+func (s *Service) Ship(ctx context.Context, actorID uint64, orderID, carrier, trackingNo string) (Shipment, OrderTransition, bool, error) {
 	orderID, carrier, trackingNo = strings.TrimSpace(orderID), strings.TrimSpace(carrier), strings.TrimSpace(trackingNo)
 	if actorID == 0 || orderID == "" || carrier == "" || trackingNo == "" || len(carrier) > 64 || len(trackingNo) > 128 {
-		return Shipment{}, orderclient.Transition{}, false, ErrInvalidRequest
+		return Shipment{}, OrderTransition{}, false, ErrInvalidRequest
 	}
 	if existing, err := s.repository.Get(ctx, orderID); err == nil {
 		if existing.Carrier != carrier || existing.TrackingNo != trackingNo {
-			return Shipment{}, orderclient.Transition{}, false, ErrConflict
+			return Shipment{}, OrderTransition{}, false, ErrConflict
 		}
 		transition, callErr := s.orders.Ship(ctx, actorID, orderID, carrier, trackingNo)
 		return existing, transition, true, callErr
 	} else if !errors.Is(err, ErrNotFound) {
-		return Shipment{}, orderclient.Transition{}, false, err
+		return Shipment{}, OrderTransition{}, false, err
 	}
 	now := s.now().UTC()
 	value, reused, err := s.repository.Create(ctx, Shipment{OrderID: orderID, Carrier: carrier, TrackingNo: trackingNo, Status: StatusShipped, ShippedAt: now, CreatedAt: now, UpdatedAt: now}, now)
 	if err != nil {
-		return Shipment{}, orderclient.Transition{}, false, err
+		return Shipment{}, OrderTransition{}, false, err
 	}
 	transition, err := s.orders.Ship(ctx, actorID, orderID, carrier, trackingNo)
 	if err != nil {
-		return Shipment{}, orderclient.Transition{}, false, err
+		return Shipment{}, OrderTransition{}, false, err
 	}
 	return value, transition, reused, nil
 }
 
-func (s *Service) ConfirmReceipt(ctx context.Context, userID uint64, orderID string) (Shipment, orderclient.Transition, bool, error) {
+func (s *Service) ConfirmReceipt(ctx context.Context, userID uint64, orderID string) (Shipment, OrderTransition, bool, error) {
 	orderID = strings.TrimSpace(orderID)
 	if userID == 0 || orderID == "" {
-		return Shipment{}, orderclient.Transition{}, false, ErrInvalidRequest
+		return Shipment{}, OrderTransition{}, false, ErrInvalidRequest
 	}
-	if _, err := s.orders.Get(ctx, userID, orderID); err != nil {
-		return Shipment{}, orderclient.Transition{}, false, err
+	if err := s.orders.Get(ctx, userID, orderID); err != nil {
+		return Shipment{}, OrderTransition{}, false, err
 	}
 	transition, err := s.orders.ConfirmReceipt(ctx, userID, orderID)
 	if err != nil {
-		return Shipment{}, orderclient.Transition{}, false, err
+		return Shipment{}, OrderTransition{}, false, err
 	}
 	value, reused, err := s.repository.MarkReceived(ctx, orderID, s.now().UTC())
 	return value, transition, reused, err
@@ -108,7 +107,7 @@ func (s *Service) Get(ctx context.Context, userID uint64, orderID string) (Shipm
 	if userID == 0 || orderID == "" {
 		return Shipment{}, ErrInvalidRequest
 	}
-	if _, err := s.orders.Get(ctx, userID, orderID); err != nil {
+	if err := s.orders.Get(ctx, userID, orderID); err != nil {
 		return Shipment{}, err
 	}
 	return s.repository.Get(ctx, orderID)

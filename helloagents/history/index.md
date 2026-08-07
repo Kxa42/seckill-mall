@@ -16,6 +16,7 @@
 | 202608061551 | unified_stage5_messaging | 架构迁移 | ✅已完成（35完成/1跳过） | [方案包](2026-08/202608061551_unified_stage5_messaging/) |
 | 202608070731 | repository_layout_refactor | 架构重构 | ✅已完成（11完成） | [方案包](2026-08/202608070731_repository_layout_refactor/) |
 | 202608070804 | service_first_monorepo | 架构重构 | ✅已完成（14完成） | [方案包](2026-08/202608070804_service_first_monorepo/) |
+| 202608070836 | private_order_clients | 架构重构 | ✅已完成（11完成） | [方案包](2026-08/202608070836_private_order_clients/) |
 
 ## 按月归档
 
@@ -31,3 +32,4 @@
 - [202608061551_unified_stage5_messaging](2026-08/202608061551_unified_stage5_messaging/) - 统一商城事件协议和服务级 Outbox/Inbox，移除旧运行时与旧 HTTP 入口，补齐 Inventory Redis Stream 到 RabbitMQ 桥接和事件消费者；Memory/race/vet/Compose 静态验收通过，真实 RabbitMQ、Compose 运行和 migration 因 Docker daemon 不可用跳过。
 - [202608070731_repository_layout_refactor](2026-08/202608070731_repository_layout_refactor/) - 统一 `cmd`、`internal`、契约、生成代码和平台目录，移除无引用遗留文件并通过完整工程门禁。
 - [202608070804_service_first_monorepo](2026-08/202608070804_service_first_monorepo/) - 八个服务收敛为自治目录，共享协议与平台能力迁入 `shared`，保留单 Go module 并通过完整工程、边界和 Compose 静态验收。
+- [202608070836_private_order_clients](2026-08/202608070836_private_order_clients/) - 删除共享 Order 业务客户端，Payment/Fulfillment 各自维护窄接口和 gRPC 适配器，并通过签名、deadline、边界和 Memory E2E 验证。

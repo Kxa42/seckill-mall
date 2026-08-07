@@ -7,4 +7,5 @@ var (
 	NewMemoryRepository = fulfillmentservice.NewMemoryRepository
 	NewService          = fulfillmentservice.NewService
 	NewServer           = fulfillmentservice.NewServer
+	NewGRPCOrderClient  = fulfillmentservice.NewGRPCOrderClient
 )

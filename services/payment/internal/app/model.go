@@ -17,7 +17,6 @@ import (
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 
-	"seckill-mall/shared/clients/order"
 	"seckill-mall/shared/contracts"
 	"seckill-mall/shared/platform/messaging"
 )
@@ -58,13 +57,13 @@ type Repository interface {
 
 type Service struct {
 	repository Repository
-	orders     orderclient.Client
+	orders     OrderClient
 	secret     []byte
 	now        func() time.Time
 	newID      func(string) (string, error)
 }
 
-func NewService(repository Repository, orders orderclient.Client, secret string) (*Service, error) {
+func NewService(repository Repository, orders OrderClient, secret string) (*Service, error) {
 	if repository == nil || orders == nil {
 		return nil, errors.New("payment repository and order client are required")
 	}
@@ -96,74 +95,74 @@ func (s *Service) Create(ctx context.Context, userID uint64, orderID string) (Pa
 	return payment, s.sign(payment.PaymentNo), reused, nil
 }
 
-func (s *Service) Callback(ctx context.Context, paymentNo, callbackRef, signature string) (Payment, orderclient.Transition, bool, error) {
+func (s *Service) Callback(ctx context.Context, paymentNo, callbackRef, signature string) (Payment, OrderTransition, bool, error) {
 	paymentNo, callbackRef = strings.TrimSpace(paymentNo), strings.TrimSpace(callbackRef)
 	if paymentNo == "" || callbackRef == "" {
-		return Payment{}, orderclient.Transition{}, false, ErrInvalidRequest
+		return Payment{}, OrderTransition{}, false, ErrInvalidRequest
 	}
 	if !hmac.Equal([]byte(strings.TrimSpace(signature)), []byte(s.sign(paymentNo))) {
-		return Payment{}, orderclient.Transition{}, false, ErrUnauthorized
+		return Payment{}, OrderTransition{}, false, ErrUnauthorized
 	}
 	payment, err := s.repository.Get(ctx, paymentNo)
 	if err != nil {
-		return Payment{}, orderclient.Transition{}, false, err
+		return Payment{}, OrderTransition{}, false, err
 	}
 	if payment.Status == StatusSucceeded {
 		if payment.CallbackRef != callbackRef {
-			return Payment{}, orderclient.Transition{}, false, ErrConflict
+			return Payment{}, OrderTransition{}, false, ErrConflict
 		}
 		transition, err := s.orders.ConfirmPayment(ctx, payment.UserID, payment.OrderID, payment.PaymentNo, callbackRef)
 		if err != nil {
-			return Payment{}, orderclient.Transition{}, false, err
+			return Payment{}, OrderTransition{}, false, err
 		}
 		return payment, transition, true, nil
 	}
 	updated, reused, err := s.repository.MarkSucceeded(ctx, paymentNo, callbackRef, s.now().UTC())
 	if err != nil {
-		return Payment{}, orderclient.Transition{}, false, err
+		return Payment{}, OrderTransition{}, false, err
 	}
 	transition, err := s.orders.ConfirmPayment(ctx, payment.UserID, payment.OrderID, payment.PaymentNo, callbackRef)
 	if err != nil {
-		return Payment{}, orderclient.Transition{}, false, err
+		return Payment{}, OrderTransition{}, false, err
 	}
 	return updated, transition, reused, nil
 }
 
-func (s *Service) Refund(ctx context.Context, userID uint64, orderID, reason string) (Refund, orderclient.Transition, bool, error) {
+func (s *Service) Refund(ctx context.Context, userID uint64, orderID, reason string) (Refund, OrderTransition, bool, error) {
 	reason = strings.TrimSpace(reason)
 	if userID == 0 || orderID == "" || reason == "" || len([]rune(reason)) > 255 {
-		return Refund{}, orderclient.Transition{}, false, ErrInvalidRequest
+		return Refund{}, OrderTransition{}, false, ErrInvalidRequest
 	}
 	order, err := s.orders.Get(ctx, userID, orderID)
 	if err != nil {
-		return Refund{}, orderclient.Transition{}, false, err
+		return Refund{}, OrderTransition{}, false, err
 	}
 	if order.UserID != userID {
-		return Refund{}, orderclient.Transition{}, false, ErrNotFound
+		return Refund{}, OrderTransition{}, false, ErrNotFound
 	}
 	existing, exists, err := s.findRefundByOrder(ctx, userID, orderID)
 	if err != nil {
-		return Refund{}, orderclient.Transition{}, false, err
+		return Refund{}, OrderTransition{}, false, err
 	}
 	if exists {
-		transition := orderclient.Transition{OrderID: orderID, Status: "refunded", Reused: true}
+		transition := OrderTransition{OrderID: orderID, Status: "refunded", Reused: true}
 		return existing, transition, true, nil
 	}
 	payment, err := s.findSucceededPayment(ctx, orderID)
 	if err != nil {
-		return Refund{}, orderclient.Transition{}, false, err
+		return Refund{}, OrderTransition{}, false, err
 	}
 	refundNo, err := s.newID("ref")
 	if err != nil {
-		return Refund{}, orderclient.Transition{}, false, err
+		return Refund{}, OrderTransition{}, false, err
 	}
 	transition, err := s.orders.Refund(ctx, userID, orderID, refundNo, reason)
 	if err != nil {
-		return Refund{}, orderclient.Transition{}, false, err
+		return Refund{}, OrderTransition{}, false, err
 	}
 	refund, reused, err := s.repository.CreateRefund(ctx, Refund{RefundNo: refundNo, OrderID: orderID, PaymentNo: payment.PaymentNo, UserID: userID, AmountCents: payment.AmountCents, Reason: reason, Status: RefundSucceeded, CreatedAt: s.now().UTC(), CompletedAt: s.now().UTC()}, s.now().UTC())
 	if err != nil {
-		return Refund{}, orderclient.Transition{}, false, err
+		return Refund{}, OrderTransition{}, false, err
 	}
 	return refund, transition, reused, nil
 }

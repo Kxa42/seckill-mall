@@ -7,4 +7,5 @@ var (
 	NewMemoryRepository = paymentservice.NewMemoryRepository
 	NewService          = paymentservice.NewService
 	NewServer           = paymentservice.NewServer
+	NewGRPCOrderClient  = paymentservice.NewGRPCOrderClient
 )

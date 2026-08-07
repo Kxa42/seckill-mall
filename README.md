@@ -71,7 +71,7 @@ go run ./services/gateway/cmd/api-gateway
 - `shared/contracts/`: 跨服务事件与数据所有权契约
 - `shared/proto/commerce/`、`shared/gen/commerce/`: Protobuf 源文件与生成代码
 - `shared/platform/`: 配置、服务发现、内部认证、消息和可观测性能力
-- `shared/clients/`: 明确命名的跨服务客户端
+- 业务客户端适配器位于消费者服务的 `services/<service>/internal/app`；共享层不保存领域客户端
 - `tools/migrate/`: 全局 migration 执行工具
 - `migrations/`: 版本化数据库迁移
 - `helloagents/`: 项目知识库、方案包和历史归档

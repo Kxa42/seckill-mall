@@ -10,7 +10,7 @@
 - Order、Payment、Fulfillment 使用服务级 SQL Outbox/Inbox；Inventory 使用 Redis Lua + Stream Outbox。
 - `shared/contracts` 是事件和数据所有权 SSOT；`shared/platform/messaging` 只提供传输/存储抽象，不依赖业务 Repository。
 - 每个服务统一位于 `services/<service>`，在自身目录内保存 `cmd`、私有 `internal`、`etc` 和可选 `testkit`。
-- 跨服务生成代码、协议、客户端和平台能力分别位于 `shared/gen`、`shared/proto`、`shared/clients` 和 `shared/platform`；仓库暂时保留单一 `go.mod`。
+- 跨服务生成代码和协议位于 `shared/gen`、`shared/proto`，通用平台能力位于 `shared/platform`；业务客户端适配器归属消费者服务，仓库暂时保留单一 `go.mod`。
 - 生产代码不得导入其他服务的 `internal` 或任何 `testkit`；`shared` 不得反向依赖 `services`。
 - 旧表 `orders`、`product`、`outbox_events` 只保留历史数据，代码不读写，migration 不 DROP/TRUNCATE。
 

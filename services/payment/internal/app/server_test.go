@@ -7,44 +7,35 @@ import (
 
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
-
-	"seckill-mall/shared/clients/order"
 )
 
 type fakeOrders struct {
-	summaries                       map[string]orderclient.Summary
+	summaries                       map[string]OrderSummary
 	confirmCalls, refundCalls       int
-	confirmTransition, refundResult orderclient.Transition
+	confirmTransition, refundResult OrderTransition
 	confirmErr                      error
 }
 
-func (f *fakeOrders) Get(_ context.Context, userID uint64, orderID string) (orderclient.Summary, error) {
+func (f *fakeOrders) Get(_ context.Context, userID uint64, orderID string) (OrderSummary, error) {
 	value, ok := f.summaries[orderID]
 	if !ok || value.UserID != userID {
-		return orderclient.Summary{}, status.Error(codes.NotFound, "订单不存在")
+		return OrderSummary{}, status.Error(codes.NotFound, "订单不存在")
 	}
 	return value, nil
 }
-func (f *fakeOrders) ConfirmPayment(_ context.Context, _ uint64, _, _, _ string) (orderclient.Transition, error) {
+func (f *fakeOrders) ConfirmPayment(_ context.Context, _ uint64, _, _, _ string) (OrderTransition, error) {
 	f.confirmCalls++
 	if f.confirmErr != nil {
 		err := f.confirmErr
 		f.confirmErr = nil
-		return orderclient.Transition{}, err
+		return OrderTransition{}, err
 	}
 	return f.confirmTransition, nil
 }
-func (f *fakeOrders) Refund(_ context.Context, _ uint64, _, _, _ string) (orderclient.Transition, error) {
+func (f *fakeOrders) Refund(_ context.Context, _ uint64, _, _, _ string) (OrderTransition, error) {
 	f.refundCalls++
 	return f.refundResult, nil
 }
-func (f *fakeOrders) Ship(context.Context, uint64, string, string, string) (orderclient.Transition, error) {
-	return orderclient.Transition{}, errors.New("unexpected Ship call")
-}
-func (f *fakeOrders) ConfirmReceipt(context.Context, uint64, string) (orderclient.Transition, error) {
-	return orderclient.Transition{}, errors.New("unexpected ConfirmReceipt call")
-}
-
 func newTestService(t *testing.T, orders *fakeOrders) *Service {
 	t.Helper()
 	service, err := NewService(NewMemoryRepository(), orders, "payment-test-secret-value-32-bytes")
@@ -60,7 +51,7 @@ func newTestService(t *testing.T, orders *fakeOrders) *Service {
 }
 
 func TestCreateAndCallbackIdempotency(t *testing.T) {
-	orders := &fakeOrders{summaries: map[string]orderclient.Summary{"order-1": {OrderID: "order-1", UserID: 9, Status: "pending_payment", TotalAmountCents: 1200}}, confirmTransition: orderclient.Transition{OrderID: "order-1", Status: "paid"}}
+	orders := &fakeOrders{summaries: map[string]OrderSummary{"order-1": {OrderID: "order-1", UserID: 9, Status: "pending_payment", TotalAmountCents: 1200}}, confirmTransition: OrderTransition{OrderID: "order-1", Status: "paid"}}
 	service := newTestService(t, orders)
 	first, signature, reused, err := service.Create(context.Background(), 9, "order-1")
 	if err != nil || reused || first.AmountCents != 1200 || signature == "" {
@@ -84,7 +75,7 @@ func TestCreateAndCallbackIdempotency(t *testing.T) {
 	if _, _, _, err := service.Callback(context.Background(), first.PaymentNo, "callback-2", signature); !errors.Is(err, ErrConflict) {
 		t.Fatalf("callback ref conflict error = %v", err)
 	}
-	orders.summaries["order-2"] = orderclient.Summary{OrderID: "order-2", UserID: 9, Status: "pending_payment", TotalAmountCents: 300}
+	orders.summaries["order-2"] = OrderSummary{OrderID: "order-2", UserID: 9, Status: "pending_payment", TotalAmountCents: 300}
 	secondOrderPayment, secondOrderSignature, _, err := service.Create(context.Background(), 9, "order-2")
 	if err != nil {
 		t.Fatalf("second order Create() error = %v", err)
@@ -99,8 +90,8 @@ func TestCreateAndCallbackIdempotency(t *testing.T) {
 
 func TestCallbackRetryConvergesAfterRemoteFailure(t *testing.T) {
 	orders := &fakeOrders{
-		summaries:         map[string]orderclient.Summary{"order-1": {OrderID: "order-1", UserID: 9, Status: "pending_payment", TotalAmountCents: 1200}},
-		confirmTransition: orderclient.Transition{OrderID: "order-1", Status: "paid", Reused: true},
+		summaries:         map[string]OrderSummary{"order-1": {OrderID: "order-1", UserID: 9, Status: "pending_payment", TotalAmountCents: 1200}},
+		confirmTransition: OrderTransition{OrderID: "order-1", Status: "paid", Reused: true},
 		confirmErr:        status.Error(codes.Unavailable, "temporary failure"),
 	}
 	service := newTestService(t, orders)
@@ -118,16 +109,16 @@ func TestCallbackRetryConvergesAfterRemoteFailure(t *testing.T) {
 }
 
 func TestRefundOwnershipAndRecoveryAfterRemoteCompletion(t *testing.T) {
-	orders := &fakeOrders{summaries: map[string]orderclient.Summary{
+	orders := &fakeOrders{summaries: map[string]OrderSummary{
 		"order-1": {OrderID: "order-1", UserID: 9, Status: "refunded", TotalAmountCents: 1200},
-	}, confirmTransition: orderclient.Transition{OrderID: "order-1", Status: "paid"}, refundResult: orderclient.Transition{OrderID: "order-1", Status: "refunded", Reused: true}}
+	}, confirmTransition: OrderTransition{OrderID: "order-1", Status: "paid"}, refundResult: OrderTransition{OrderID: "order-1", Status: "refunded", Reused: true}}
 	service := newTestService(t, orders)
 	payment, signature, _, err := service.Create(context.Background(), 9, "order-1")
 	if !errors.Is(err, ErrInvalidTransition) {
 		// 先模拟订单支付前状态创建支付单，再恢复为已退款状态。
 		t.Fatalf("Create() with refunded order error = %v", err)
 	}
-	orders.summaries["order-1"] = orderclient.Summary{OrderID: "order-1", UserID: 9, Status: "pending_payment", TotalAmountCents: 1200}
+	orders.summaries["order-1"] = OrderSummary{OrderID: "order-1", UserID: 9, Status: "pending_payment", TotalAmountCents: 1200}
 	payment, signature, _, err = service.Create(context.Background(), 9, "order-1")
 	if err != nil {
 		t.Fatalf("Create() error = %v", err)
@@ -135,7 +126,7 @@ func TestRefundOwnershipAndRecoveryAfterRemoteCompletion(t *testing.T) {
 	if _, _, _, err := service.Callback(context.Background(), payment.PaymentNo, "callback-1", signature); err != nil {
 		t.Fatalf("Callback() error = %v", err)
 	}
-	orders.summaries["order-1"] = orderclient.Summary{OrderID: "order-1", UserID: 9, Status: "refunded", TotalAmountCents: 1200}
+	orders.summaries["order-1"] = OrderSummary{OrderID: "order-1", UserID: 9, Status: "refunded", TotalAmountCents: 1200}
 	if _, _, _, err := service.Refund(context.Background(), 10, "order-1", "越权退款"); status.Code(err) != codes.NotFound {
 		t.Fatalf("foreign Refund() code = %s, want %s", status.Code(err), codes.NotFound)
 	}

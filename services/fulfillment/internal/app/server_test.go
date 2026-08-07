@@ -10,18 +10,18 @@ import (
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
 
-	"seckill-mall/shared/clients/order"
 	"seckill-mall/shared/gen/commerce"
 	"seckill-mall/shared/platform/internalcall"
 )
 
 type fakeOrders struct {
-	summary                 orderclient.Summary
+	orderID                 string
+	userID                  uint64
 	shipCalls, receiptCalls int
 }
 
 func TestShipmentConflictAndUserOwnership(t *testing.T) {
-	orders := &fakeOrders{summary: orderclient.Summary{OrderID: "order-1", UserID: 9, Status: "paid"}}
+	orders := &fakeOrders{orderID: "order-1", userID: 9}
 	service, _ := NewService(NewMemoryRepository(), orders)
 	if _, _, _, err := service.Ship(context.Background(), 1, "order-1", "SF", "SF-1"); err != nil {
 		t.Fatalf("Ship() error = %v", err)
@@ -43,7 +43,7 @@ func TestShipmentConflictAndUserOwnership(t *testing.T) {
 func TestFulfillmentServerRejectsForgedAdminRole(t *testing.T) {
 	secret := "fulfillment-internal-secret"
 	t.Setenv("SECKILL_INTERNAL_CALL_SECRET", secret)
-	orders := &fakeOrders{summary: orderclient.Summary{OrderID: "order-1", UserID: 9, Status: "paid"}}
+	orders := &fakeOrders{orderID: "order-1", userID: 9}
 	service, _ := NewService(NewMemoryRepository(), orders)
 	server, _ := NewServer(service)
 	now := time.Now()
@@ -63,30 +63,23 @@ func incomingMetadata(ctx context.Context) context.Context {
 	return metadata.NewIncomingContext(context.Background(), values)
 }
 
-func (f *fakeOrders) Get(_ context.Context, userID uint64, orderID string) (orderclient.Summary, error) {
-	value := f.summary
-	if value.UserID != userID || value.OrderID != orderID {
-		return orderclient.Summary{}, ErrNotFound
+func (f *fakeOrders) Get(_ context.Context, userID uint64, orderID string) error {
+	if f.userID != userID || f.orderID != orderID {
+		return ErrNotFound
 	}
-	return value, nil
+	return nil
 }
-func (f *fakeOrders) ConfirmPayment(context.Context, uint64, string, string, string) (orderclient.Transition, error) {
-	return orderclient.Transition{}, nil
-}
-func (f *fakeOrders) Refund(context.Context, uint64, string, string, string) (orderclient.Transition, error) {
-	return orderclient.Transition{}, nil
-}
-func (f *fakeOrders) Ship(_ context.Context, _ uint64, orderID, _, _ string) (orderclient.Transition, error) {
+func (f *fakeOrders) Ship(_ context.Context, _ uint64, orderID, _, _ string) (OrderTransition, error) {
 	f.shipCalls++
-	return orderclient.Transition{OrderID: orderID, Status: "shipped", Reused: f.shipCalls > 1}, nil
+	return OrderTransition{OrderID: orderID, Status: "shipped", Reused: f.shipCalls > 1}, nil
 }
-func (f *fakeOrders) ConfirmReceipt(_ context.Context, _ uint64, orderID string) (orderclient.Transition, error) {
+func (f *fakeOrders) ConfirmReceipt(_ context.Context, _ uint64, orderID string) (OrderTransition, error) {
 	f.receiptCalls++
-	return orderclient.Transition{OrderID: orderID, Status: "completed", Reused: f.receiptCalls > 1}, nil
+	return OrderTransition{OrderID: orderID, Status: "completed", Reused: f.receiptCalls > 1}, nil
 }
 
 func TestShipAndReceiptAreIdempotent(t *testing.T) {
-	orders := &fakeOrders{summary: orderclient.Summary{OrderID: "order-1", UserID: 9, Status: "paid"}}
+	orders := &fakeOrders{orderID: "order-1", userID: 9}
 	service, _ := NewService(NewMemoryRepository(), orders)
 	first, _, reused, err := service.Ship(context.Background(), 1, "order-1", "SF", "SF-1")
 	if err != nil || reused {

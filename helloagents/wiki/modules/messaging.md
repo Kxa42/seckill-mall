@@ -10,6 +10,7 @@
 - Inventory 使用 Redis Lua 在库存/reservation 状态变更的同一脚本中 `XADD` Stream Outbox；无 Redis 时使用 MemoryEventStream。
 - RabbitMQ 使用 `commerce.events.v1`、retry exchange、DLX、服务独立队列、Publisher Confirm、mandatory return、手动 Ack 和有限重试。
 - `(consumer,event_id)` Inbox claim 保证重复投递收敛；未知事件和未来版本安全确认并隔离。
+- Messaging 共享层只负责事件契约和传输运行时，不承载 Order 等业务客户端；业务客户端适配器由调用方服务私有维护。
 
 ## 事件
 `seckill.accepted.v1`、`order.created.v1`、`order.cancelled.v1`、`payment.succeeded.v1`、`payment.refunded.v1`、`inventory.reserved.v1`、`inventory.released.v1`、`inventory.restocked.v1`、`shipment.created.v1`、`shipment.delivered.v1`。
@@ -20,5 +21,6 @@
 - RabbitMQ 真实故障注入需要 Docker；`tests/stage5_rabbitmq_e2e.sh` 会在基础设施不可用时明确跳过。
 
 ## 变更历史
+- [202608070836_private_order_clients](../../history/2026-08/202608070836_private_order_clients/) - 明确共享消息层与业务客户端的边界。
 - [202608070804_service_first_monorepo](../../history/2026-08/202608070804_service_first_monorepo/) - 消息契约和运行时迁入跨服务共享层。
 - [202608070731_repository_layout_refactor](../../history/2026-08/202608070731_repository_layout_refactor/) - 消息运行时迁入统一平台目录。

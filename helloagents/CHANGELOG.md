@@ -30,6 +30,7 @@
 - 仓库演进为服务优先单仓库：八个服务分别拥有 `services/<service>/cmd`、私有 `internal`、`etc` 和可选 `testkit`，同时保留单一 `go.mod`。
 - 跨服务契约、Protobuf、生成代码、客户端和平台能力收敛到 `shared`；migration 工具迁入 `tools/migrate`，SQL migration 版本路径保持不变。
 - 新增编译与脚本边界门禁，禁止生产代码跨服务导入 `internal`/`testkit`，并禁止 `shared` 反向依赖 `services`。
+- Order 客户端适配器完全收敛到 Payment 和 Fulfillment 各自的 `internal/app`，两个服务使用独立窄接口，保留共享 Protobuf 与 HMAC 基础设施。
 - 在服务优先迁移前先完成标准 Go 过渡布局，拆分 Gateway 薄入口与内部实现并消除其对 Order 实现包的直接依赖。
 - Gateway 内部调用签名现使用 `shared/platform/internalcall`；Identity 入口统一命名为 `services/identity/cmd/identity-service`。
 - Protobuf `go_package`、Compose 构建路径、测试脚本、README 和知识库已同步服务优先目录；migration 文件名保持稳定以兼容已记录版本。
@@ -56,6 +57,7 @@
 - 移除服务优先迁移后的根级 `cmd`、`internal`、`config`、`proto`、`api` 空目录和过时 `stress_test` 程序。
 - 移除已被按服务配置替代的 `config.example.yaml`、未被入口加载的 `config/user.yaml` 和旧 `/order` HTTP 示例 `test.http`。
 - 移除已被 `shared/proto/commerce/*` 替代的旧 `proto/order.proto`、`proto/product.proto`，以及阶段 5 已覆盖的旧 Memory E2E 脚本。
+- 移除 `shared/clients/order`，不再在共享层保存 Order 业务客户端和联合业务模型。
 - 移除不含跟踪文件的旧服务、集中 Worker 和过渡模块空目录。
 
 ## [0.1.0] - 2026-08-05
