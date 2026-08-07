@@ -17,4 +17,6 @@
 
 ## 规则
 
-代码是运行时事实；服务只写自己的数据集；旧表仅历史保留。完整 API 以 [api.md](api.md) 和 [OpenAPI](../../api/openapi.yaml) 为准。
+代码是运行时事实；服务只写自己的数据集；旧表仅历史保留。完整 API 以 [api.md](api.md) 和 [OpenAPI](../../services/gateway/api/openapi.yaml) 为准。
+
+工程采用服务优先单仓库：服务入口、私有实现、配置和测试门面位于 `services/<service>`，跨服务契约、生成代码、协议、客户端和平台能力位于 `shared`，全仓暂时共享单一 `go.mod`。

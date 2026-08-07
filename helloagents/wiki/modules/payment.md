@@ -10,4 +10,8 @@
 - `payment.succeeded.v1`、`payment.refunded.v1` 与本地状态同事务提交。
 
 ## 入口
-gRPC `Create/Callback/Refund`；Gateway `/api/v1/orders/:order_id/payments`、`/api/v1/payments/callback`、`/api/v1/orders/:order_id/refunds`；启动 `go run ./cmd/payment-service`。
+gRPC `Create/Callback/Refund`；Gateway `/api/v1/orders/:order_id/payments`、`/api/v1/payments/callback`、`/api/v1/orders/:order_id/refunds`；启动 `go run ./services/payment/cmd/payment-service`，实现位于 `services/payment/internal/app`。
+
+## 变更历史
+- [202608070804_service_first_monorepo](../../history/2026-08/202608070804_service_first_monorepo/) - Payment 的入口、实现、测试和配置收敛到服务自治目录。
+- [202608070731_repository_layout_refactor](../../history/2026-08/202608070731_repository_layout_refactor/) - Payment 实现迁入统一内部服务目录。

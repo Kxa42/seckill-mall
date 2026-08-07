@@ -1,0 +1,118 @@
+syntax = "proto3";
+
+package commerce.order.v1;
+
+option go_package = "seckill-mall/shared/gen/commerce;pb";
+
+message OrderItemInput {
+  uint64 sku_id = 1;
+  int32 quantity = 2;
+}
+
+message OrderCreateRequest {
+  string idempotency_key = 1;
+  uint64 user_id = 2;
+  uint64 address_id = 3;
+  string order_type = 4;
+  repeated OrderItemInput items = 5;
+  uint64 activity_id = 6;
+}
+
+message OrderCreateResponse {
+  string order_id = 1;
+  string status = 2;
+  int64 total_amount_cents = 3;
+  bool reused = 4;
+  string message = 5;
+}
+
+message OrderGetRequest {
+  uint64 user_id = 1;
+  string order_id = 2;
+}
+
+message OrderGetResponse {
+  string order_id = 1;
+  uint64 user_id = 2;
+  string order_type = 3;
+  string status = 4;
+  int64 total_amount_cents = 5;
+}
+
+message OrderListRequest {
+  uint64 user_id = 1;
+  int32 offset = 2;
+  int32 limit = 3;
+}
+
+message OrderListResponse {
+  repeated OrderGetResponse items = 1;
+  int64 total = 2;
+  int32 offset = 3;
+  int32 limit = 4;
+}
+
+message OrderCancelRequest {
+  uint64 user_id = 1;
+  string order_id = 2;
+  string reason = 3;
+}
+
+message OrderCancelResponse {
+  string order_id = 1;
+  string status = 2;
+  string message = 3;
+}
+
+message OrderExpireRequest {
+  int32 limit = 1;
+}
+
+message OrderExpireResponse {
+  int32 count = 1;
+}
+
+message OrderPaymentConfirmRequest {
+  uint64 user_id = 1;
+  string order_id = 2;
+  string payment_no = 3;
+  string callback_ref = 4;
+}
+
+message OrderShipRequest {
+  uint64 actor_id = 1;
+  string order_id = 2;
+  string carrier = 3;
+  string tracking_no = 4;
+}
+
+message OrderConfirmReceiptRequest {
+  uint64 user_id = 1;
+  string order_id = 2;
+}
+
+message OrderRefundRequest {
+  uint64 user_id = 1;
+  string order_id = 2;
+  string refund_no = 3;
+  string reason = 4;
+}
+
+message OrderTransitionResponse {
+  string order_id = 1;
+  string status = 2;
+  bool reused = 3;
+  string message = 4;
+}
+
+service CommerceOrderService {
+  rpc Create(OrderCreateRequest) returns (OrderCreateResponse);
+  rpc Get(OrderGetRequest) returns (OrderGetResponse);
+  rpc List(OrderListRequest) returns (OrderListResponse);
+  rpc Cancel(OrderCancelRequest) returns (OrderCancelResponse);
+  rpc Expire(OrderExpireRequest) returns (OrderExpireResponse);
+  rpc ConfirmPayment(OrderPaymentConfirmRequest) returns (OrderTransitionResponse);
+  rpc Ship(OrderShipRequest) returns (OrderTransitionResponse);
+  rpc ConfirmReceipt(OrderConfirmReceiptRequest) returns (OrderTransitionResponse);
+  rpc Refund(OrderRefundRequest) returns (OrderTransitionResponse);
+}

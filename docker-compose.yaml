@@ -20,7 +20,7 @@ services:
   migrate:
     build:
       context: .
-      args: {PACKAGE: ./cmd/migrate}
+      args: {PACKAGE: ./tools/migrate}
     environment:
       SECKILL_MYSQL_DSN: "root:${SECKILL_MYSQL_ROOT_PASSWORD:?SECKILL_MYSQL_ROOT_PASSWORD is required}@tcp(mysql:3306)/seckill?charset=utf8mb4&parseTime=True&loc=UTC"
       SECKILL_MIGRATIONS_DIR: /app/migrations
@@ -85,7 +85,7 @@ services:
     environment: {COLLECTOR_OTLP_ENABLED: "true"}
 
   catalog-service:
-    build: {context: ., args: {PACKAGE: ./cmd/catalog-service}}
+    build: {context: ., args: {PACKAGE: ./services/catalog/cmd/catalog-service}}
     container_name: seckill-catalog-service
     ports: ["51002:51002", "9102:9102"]
     environment:
@@ -98,7 +98,7 @@ services:
       etcd: {condition: service_healthy}
 
   inventory-service:
-    build: {context: ., args: {PACKAGE: ./cmd/inventory-service}}
+    build: {context: ., args: {PACKAGE: ./services/inventory/cmd/inventory-service}}
     container_name: seckill-inventory-service
     ports: ["51003:51003", "9103:9103"]
     environment:
@@ -115,7 +115,7 @@ services:
       etcd: {condition: service_healthy}
 
   identity-service:
-    build: {context: ., args: {PACKAGE: ./cmd/identity-snapshot-service}}
+    build: {context: ., args: {PACKAGE: ./services/identity/cmd/identity-service}}
     container_name: seckill-identity-service
     ports: ["51001:51001"]
     environment:
@@ -130,7 +130,7 @@ services:
       etcd: {condition: service_healthy}
 
   cart-service:
-    build: {context: ., args: {PACKAGE: ./cmd/cart-service}}
+    build: {context: ., args: {PACKAGE: ./services/cart/cmd/cart-service}}
     container_name: seckill-cart-service
     ports: ["51004:51004"]
     environment:
@@ -146,7 +146,7 @@ services:
       etcd: {condition: service_healthy}
 
   order-service:
-    build: {context: ., args: {PACKAGE: ./cmd/order-service}}
+    build: {context: ., args: {PACKAGE: ./services/order/cmd/order-service}}
     container_name: seckill-order-service
     ports: ["51005:51005"]
     environment:
@@ -169,7 +169,7 @@ services:
       etcd: {condition: service_healthy}
 
   payment-service:
-    build: {context: ., args: {PACKAGE: ./cmd/payment-service}}
+    build: {context: ., args: {PACKAGE: ./services/payment/cmd/payment-service}}
     container_name: seckill-payment-service
     ports: ["51006:51006"]
     environment:
@@ -188,7 +188,7 @@ services:
       etcd: {condition: service_healthy}
 
   fulfillment-service:
-    build: {context: ., args: {PACKAGE: ./cmd/fulfillment-service}}
+    build: {context: ., args: {PACKAGE: ./services/fulfillment/cmd/fulfillment-service}}
     container_name: seckill-fulfillment-service
     ports: ["51007:51007"]
     environment:
@@ -206,7 +206,7 @@ services:
       etcd: {condition: service_healthy}
 
   api-gateway:
-    build: {context: ., args: {PACKAGE: ./api_gateway}}
+    build: {context: ., args: {PACKAGE: ./services/gateway/cmd/api-gateway}}
     container_name: seckill-api-gateway
     ports: ["8080:8080"]
     environment:

@@ -20,9 +20,7 @@ Order 是订单状态唯一维护者，Inventory 是 reservation/库存唯一维
 无 Docker 时各服务默认可以使用 Memory/Fake/bufconn：
 
 ```bash
-GOTMPDIR=/tmp/seckill-go-build go test ./...
-GOTMPDIR=/tmp/seckill-go-build go vet ./...
-bash tests/stage5_memory_e2e.sh
+make check
 ```
 
 Go 临时目录使用 `/tmp` 是当前受限环境要求。真实 RabbitMQ 验收入口为：
@@ -38,15 +36,17 @@ Docker 不可用时脚本会明确跳过，不连接生产或外部真实服务�
 单服务本地启动示例：
 
 ```bash
-go run ./cmd/catalog-service
-go run ./cmd/inventory-service
-go run ./cmd/order-service
-go run ./cmd/payment-service
-go run ./cmd/fulfillment-service
-go run ./api_gateway
+go run ./services/catalog/cmd/catalog-service
+go run ./services/inventory/cmd/inventory-service
+go run ./services/identity/cmd/identity-service
+go run ./services/cart/cmd/cart-service
+go run ./services/order/cmd/order-service
+go run ./services/payment/cmd/payment-service
+go run ./services/fulfillment/cmd/fulfillment-service
+go run ./services/gateway/cmd/api-gateway
 ```
 
-设置 `SECKILL_SERVICES_CONFIG=config/commerce-services.example.yaml` 可使用统一按角色配置。MySQL、Redis、etcd 和 RabbitMQ 未配置时，目标服务保持安全的 Memory/Fake 降级；配置 `SECKILL_MQ_URL` 后才启动 RabbitMQ Outbox Publisher/Consumer。
+设置 `SECKILL_SERVICES_CONFIG=deploy/config/commerce-services.example.yaml` 可使用统一按角色配置。各服务的本地配置位于自身 `etc/`；MySQL、Redis、etcd 和 RabbitMQ 未配置时，目标服务保持安全的 Memory/Fake 降级。
 
 ## 数据边界
 
@@ -60,17 +60,18 @@ go run ./api_gateway
 
 ## 部署
 
-`docker-compose.yaml` 只包含新商城服务、MySQL migration、Redis、RabbitMQ、etcd、Gateway 和监控组件。RabbitMQ 拓扑由 `common/messaging` 声明：Topic 主交换机、每服务主队列、retry queue 和 DLQ，消费者使用手动 Ack、Inbox 幂等和有限重试。
+`docker-compose.yaml` 只包含新商城服务、MySQL migration、Redis、RabbitMQ、etcd、Gateway 和监控组件。RabbitMQ 拓扑由 `shared/platform/messaging` 声明：Topic 主交换机、每服务主队列、retry queue 和 DLQ，消费者使用手动 Ack、Inbox 幂等和有限重试。
 
 ## 目录
 
-- `api_gateway/`: 版本化 HTTP Gateway
-- `cmd/*-service/`: 新商城服务入口
-- `common/contracts/`: 跨服务事件与边界契约
-- `common/messaging/`: Outbox、Inbox、RabbitMQ、Fake Broker 和发布循环
-- `internal/order/`: Order 状态机与 MySQL/Memory Repository
-- `inventory_service/`: Redis Lua、Stream Outbox 和 Memory Store
-- `payment_service/`: 支付/退款状态机与事件消费者
-- `fulfillment_service/`: 发货/收货状态机与事件消费者
+- `services/<service>/cmd/`: 服务可执行入口
+- `services/<service>/internal/`: 服务私有实现与单元测试，其他服务不可导入
+- `services/<service>/etc/`: 服务本地配置
+- `services/<service>/testkit/`: 仅供跨服务内存 E2E 使用的最小测试门面
+- `shared/contracts/`: 跨服务事件与数据所有权契约
+- `shared/proto/commerce/`、`shared/gen/commerce/`: Protobuf 源文件与生成代码
+- `shared/platform/`: 配置、服务发现、内部认证、消息和可观测性能力
+- `shared/clients/`: 明确命名的跨服务客户端
+- `tools/migrate/`: 全局 migration 执行工具
 - `migrations/`: 版本化数据库迁移
 - `helloagents/`: 项目知识库、方案包和历史归档

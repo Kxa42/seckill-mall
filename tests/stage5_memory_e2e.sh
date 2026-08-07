@@ -8,5 +8,7 @@ mkdir -p "$task_tmp" "$task_cache"
 cd "$repo_root"
 
 GOTMPDIR="$task_tmp" GOCACHE="$task_cache" go test \
-  ./common/contracts ./common/messaging ./inventory_service ./internal/order \
-  ./payment_service ./fulfillment_service ./api_gateway -count=1
+  ./shared/contracts ./shared/platform/messaging \
+  ./services/inventory/internal/app ./services/order/internal/app \
+  ./services/payment/internal/app ./services/fulfillment/internal/app \
+  ./services/gateway/internal/app -count=1

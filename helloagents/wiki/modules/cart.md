@@ -5,8 +5,8 @@
 
 ## 模块概述
 - **职责:** `cart_items` 所有权、Set/Delete/List/Preview、价格与金额溢出校验。
-- **状态:** 🚧第 4 阶段已独立接入
-- **最后更新:** 2026-08-06
+- **状态:** ✅独立服务
+- **最后更新:** 2026-08-07
 
 ## 规范
 
@@ -28,7 +28,7 @@
 ## API接口
 - gRPC `Set/Delete/List/Preview`。
 - Gateway: `GET /api/v1/cart`、`POST /api/v1/cart/items`、`DELETE /api/v1/cart/items/:sku_id`、`GET /api/v1/cart/preview`。
-- 独立入口：`go run ./cmd/cart-service`。
+- 独立入口：`go run ./services/cart/cmd/cart-service`；实现位于 `services/cart/internal/app`。
 
 ## 数据模型
 - 只写 `cart_items(user_id, sku_id, quantity, created_at, updated_at)`。
@@ -37,4 +37,6 @@
 - Catalog gRPC、MySQL 或 Memory Repository、etcd 注册。
 
 ## 变更历史
+- [202608070804_service_first_monorepo](../../history/2026-08/202608070804_service_first_monorepo/) - Cart 的入口、实现、测试和配置收敛到服务自治目录。
+- [202608070731_repository_layout_refactor](../../history/2026-08/202608070731_repository_layout_refactor/) - Cart 实现迁入统一内部服务目录。
 - [202608061319_stage4_domain_services](../../history/2026-08/202608061319_stage4_domain_services/) - 拆分 Cart 并接入 Gateway。

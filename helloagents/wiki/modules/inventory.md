@@ -15,4 +15,9 @@
 ## 入口与依赖
 - gRPC: `InventoryService`。
 - Gateway/Order: `/api/v1/seckill/orders` 由 Order 统一编排。
-- `go run ./cmd/inventory-service`；Redis 可选，Stream 使用 consumer group 和 pending claim。
+- `go run ./services/inventory/cmd/inventory-service`；Redis 可选，Stream 使用 consumer group 和 pending claim。
+- 实现位于 `services/inventory/internal/app`，本地配置位于 `services/inventory/etc`。
+
+## 变更历史
+- [202608070804_service_first_monorepo](../../history/2026-08/202608070804_service_first_monorepo/) - Inventory 的入口、实现、测试和配置收敛到服务自治目录。
+- [202608070731_repository_layout_refactor](../../history/2026-08/202608070731_repository_layout_refactor/) - Inventory 实现迁入统一内部服务目录。

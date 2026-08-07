@@ -13,4 +13,4 @@ fi
 
 repo_root=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
 cd "$repo_root"
-GOTMPDIR=${SECKILL_MALL_GO_TMPDIR:-/tmp/seckill-mall-go-build} go test ./common/messaging -count=1
+GOTMPDIR=${SECKILL_MALL_GO_TMPDIR:-/tmp/seckill-mall-go-build} go test ./shared/platform/messaging -count=1

@@ -13,7 +13,11 @@
 ## 入口
 - gRPC: `CommerceOrderService`。
 - Gateway: `/api/v1/orders*`、`/api/v1/seckill/orders`。
-- 独立入口: `go run ./cmd/order-service`。
+- 独立入口: `go run ./services/order/cmd/order-service`；实现位于 `services/order/internal/app`。
 
 ## 依赖
 Catalog、Identity、Inventory gRPC；MySQL 或 Memory Repository；RabbitMQ 可选。
+
+## 变更历史
+- [202608070804_service_first_monorepo](../../history/2026-08/202608070804_service_first_monorepo/) - Order 的入口、实现、测试和配置收敛到服务自治目录。
+- [202608070731_repository_layout_refactor](../../history/2026-08/202608070731_repository_layout_refactor/) - Order 与其他领域服务统一采用内部服务目录约定。

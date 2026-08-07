@@ -20,7 +20,7 @@
 | GET | `/orders/:order_id/shipment` | 用户 | Fulfillment |
 | GET | `/healthz` | 否 | Gateway |
 
-金额使用整数分，订单创建必须使用 `Idempotency-Key`。内部 gRPC 调用使用 HMAC metadata，具体字段以 `api/openapi.yaml` 和 `common/pb` 为准。
+金额使用整数分，订单创建必须使用 `Idempotency-Key`。内部 gRPC 调用使用 HMAC metadata，具体字段以 `services/gateway/api/openapi.yaml`、`shared/proto/commerce` 和 `shared/gen/commerce` 为准。
 
 ## 已移除入口
 

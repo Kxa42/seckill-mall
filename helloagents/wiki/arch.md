@@ -31,9 +31,20 @@ flowchart LR
 
 ## 运行边界
 - Gateway 只建立目标服务 gRPC 客户端，显式注册 `/api/v1` 路由；未注册路径返回 404。
+- Gateway 实现位于 `services/gateway/internal`，只通过 `shared/gen/commerce`、`shared/contracts` 和 `shared/platform/internalcall` 调用领域服务，不引用其他服务实现包。
 - Order、Payment、Fulfillment 的领域状态和事件写入各自数据库事务；Inventory 状态和 Stream Outbox 在同一 Redis Lua 脚本中完成。
 - RabbitMQ 由服务自身发布和消费，不存在集中旧 Worker；服务队列、retry 和 DLQ 按消费者隔离。
 - 旧服务代码、旧 HTTP 入口和旧消息 Worker 已从构建/Compose 移除；旧数据库表不删除，仅停止读写。
+
+## 仓库布局
+
+- `services/<service>/cmd` 保存服务进程入口和运行时组装。
+- `services/<service>/internal` 保存该服务私有的领域模型、Repository、服务实现和单元测试，Go 编译器阻止跨服务导入。
+- `services/<service>/etc` 保存服务本地配置；可选 `testkit` 仅向跨服务内存 E2E 暴露最小组装门面。
+- `shared/contracts`、`shared/proto`、`shared/gen` 和 `shared/clients` 保存显式跨服务协议与客户端。
+- `shared/platform` 保存配置、服务发现、内部认证、消息、迁移和可观测性能力，且不得反向依赖 `services`。
+- `tools` 保存仓库级工具；当前所有服务和工具共享根级 `go.mod`。
+- `migrations` 保持全局版本文件名稳定，因为文件名是 `schema_migrations.version` 的持久标识。
 
 ## 事件路由
 
@@ -63,5 +74,7 @@ flowchart LR
 | ADR-001 | 统一新商城为唯一运行时，旧入口返回 404 | 2026-08-06 | ✅采纳 |
 | ADR-002 | 按服务保存 Outbox/Inbox，Inventory 使用 Redis Stream | 2026-08-06 | ✅采纳 |
 | ADR-003 | 旧表只停用不删除 | 2026-08-06 | ✅采纳 |
+| ADR-004 | 统一入口、服务实现、契约与平台层目录 | 2026-08-07 | ✅采纳 |
+| ADR-005 | 采用服务优先单仓库并保留单 Go module | 2026-08-07 | ✅采纳 |
 
-详细设计见 `helloagents/history/2026-08/202608061551_unified_stage5_messaging/how.md`。
+目录分层设计见 [ADR-004](../history/2026-08/202608070731_repository_layout_refactor/how.md#adr-004-统一单仓库服务目录与平台层)；服务优先设计见 [ADR-005](../history/2026-08/202608070804_service_first_monorepo/how.md#adr-005-采用服务优先单仓库并保留单-go-module)。

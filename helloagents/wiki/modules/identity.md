@@ -5,8 +5,8 @@
 
 ## 模块概述
 - **职责:** 注册、登录、Refresh Token 轮换、管理员初始化、地址 CRUD、用户/地址归属校验和 `GetAddressSnapshot`。
-- **状态:** 🚧第 4 阶段已拆分
-- **最后更新:** 2026-08-06
+- **状态:** ✅独立服务
+- **最后更新:** 2026-08-07
 
 ## 规范
 
@@ -30,17 +30,19 @@
 - `IdentityService.Register/Login/Refresh`。
 - `IdentityService.CreateAddress/UpdateAddress/DeleteAddress/ListAddresses`。
 - `IdentityService.GetAddressSnapshot(user_id, address_id)`。
-- 服务入口：`go run ./cmd/identity-snapshot-service`（进程名兼容，服务职责已升级为完整 Identity）。
+- 服务入口：`go run ./services/identity/cmd/identity-service`；实现位于 `services/identity/internal/app`。
 
 ## 数据与依赖
 - 生产适配只访问 `users`、`refresh_tokens`、`user_addresses`；无 DSN 时使用并发安全 Memory Repository。
 - Order 只依赖 gRPC 客户端，不获取 Identity DSN。
-- Gateway 已显式把 `/api/v1/auth/*` 和 `/api/v1/addresses*` 路由切到 Identity；Commerce 仅保留兼容回退。
+- Gateway 已显式把 `/api/v1/auth/*` 和 `/api/v1/addresses*` 路由切到 Identity，不存在旧 Commerce 回退。
 
 ## 当前边界
-- 阶段 4 已完成身份能力的独立进程拆分；新商城 RabbitMQ Outbox/Inbox 运行时仍留待阶段 5。
+- Identity 已完成独立进程拆分，入口、实现、测试和配置收敛于 `services/identity`。
 - Docker 不可用时使用 Memory/bufconn 验收，不执行真实数据库联调。
 
 ## 变更历史
+- [202608070804_service_first_monorepo](../../history/2026-08/202608070804_service_first_monorepo/) - Identity 收敛到服务自治目录并提供最小内存测试门面。
+- [202608070731_repository_layout_refactor](../../history/2026-08/202608070731_repository_layout_refactor/) - 统一 Identity 入口命名和实现目录。
 - [202608061112_order_service_orchestration](../../history/2026-08/202608061112_order_service_orchestration/) - 新增地址快照 gRPC 适配器。
 - [202608061319_stage4_domain_services](../../history/2026-08/202608061319_stage4_domain_services/) - 升级为完整 Identity Service 并接入 Gateway。
