@@ -13,11 +13,11 @@ jwt:
 
 catalog:
   service_name: "catalog-service"
-  address: "" # 留空时通过 etcd://seckill/catalog-service 发现
+  address: "" # 留空时通过 etcd:///catalog-service 发现
 
 inventory:
   service_name: "inventory-service"
-  address: "" # 留空时通过 etcd://seckill/inventory-service 发现
+  address: "" # 留空时通过 etcd:///inventory-service 发现
 
 order:
   service_name: "order-service"

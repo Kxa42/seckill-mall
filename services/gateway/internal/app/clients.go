@@ -13,7 +13,7 @@ import (
 	resolver "go.etcd.io/etcd/client/v3/naming/resolver"
 
 	"seckill-mall/shared/contracts"
-	"seckill-mall/shared/gen/commerce"
+	pb "seckill-mall/shared/gen/commerce"
 	"seckill-mall/shared/platform/config"
 
 	"go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc"
@@ -98,13 +98,13 @@ func dialService(serviceName, directAddress string, etcdResolver gresolver.Build
 		grpc.WithStatsHandler(otelgrpc.NewClientHandler()),
 	}
 	if target == "" {
-		target = "etcd:///seckill/" + serviceName
+		target = "etcd:///" + serviceName
 		if etcdResolver == nil {
 			log.Fatalf("service discovery unavailable service=%s", serviceName)
 		}
 		options = append(options, grpc.WithResolvers(etcdResolver), grpc.WithDefaultServiceConfig(`{"loadBalancingPolicy":"round_robin"}`))
 	}
-	conn, err := grpc.Dial(target, options...)
+	conn, err := grpc.NewClient(target, options...)
 	if err != nil {
 		log.Fatalf("grpc client dial failed service=%s: %v", serviceName, err)
 	}
