@@ -7,28 +7,29 @@ import (
 	"log"
 	"net"
 	"net/http"
+	"os"
+	"os/signal"
 	"strings"
+	"syscall"
 
 	grpc_prometheus "github.com/grpc-ecosystem/go-grpc-prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc"
 	"google.golang.org/grpc"
-	"google.golang.org/grpc/health"
-	"google.golang.org/grpc/health/grpc_health_v1"
 	"gorm.io/driver/mysql"
 	"gorm.io/gorm"
 
 	"seckill-mall/services/catalog/internal/app"
 	"seckill-mall/shared/contracts"
 	"seckill-mall/shared/gen/commerce"
+	"seckill-mall/shared/platform/appkit"
 	"seckill-mall/shared/platform/config"
-	"seckill-mall/shared/platform/discovery"
 	"seckill-mall/shared/platform/tracer"
 )
 
 func main() {
 	config.InitConfig("catalog")
-	validateServiceContract(contracts.ServiceCatalog)
+	appkit.ValidateContract(contracts.ServiceCatalog)
 	shutdown := tracer.InitTracer("catalog-service", tracer.EndpointFromEnv())
 	defer shutdown(context.Background())
 
@@ -48,17 +49,11 @@ func main() {
 	if serviceName == "" {
 		serviceName = contracts.ServiceCatalog
 	}
-	advertiseAddr := config.Conf.Catalog.Address
-	if advertiseAddr == "" {
-		advertiseAddr = "127.0.0.1:" + port
-	}
-	advertiseAddr = config.AdvertiseAddr(advertiseAddr)
-	registration, err := discovery.Register(context.Background(), config.Conf.Etcd.Addr, serviceName, advertiseAddr)
-	if err != nil {
-		log.Printf("catalog etcd registration skipped service=%s err=%v", serviceName, err)
-	} else {
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+	registration := appkit.RegisterService(ctx, serviceName, config.Conf.Catalog.Address, port)
+	if registration != nil {
 		defer func() { _ = registration.Close(context.Background()) }()
-		log.Printf("catalog registered service=%s addr=%s", serviceName, advertiseAddr)
 	}
 	startMetricsServer()
 
@@ -72,25 +67,11 @@ func main() {
 		grpc.UnaryInterceptor(grpc_prometheus.UnaryServerInterceptor),
 	)
 	pb.RegisterCatalogServiceServer(grpcServer, server)
-	healthServer := health.NewServer()
-	healthServer.SetServingStatus("", grpc_health_v1.HealthCheckResponse_SERVING)
-	healthServer.SetServingStatus("commerce.catalog.v1.CatalogService", grpc_health_v1.HealthCheckResponse_SERVING)
-	grpc_health_v1.RegisterHealthServer(grpcServer, healthServer)
+	appkit.RegisterHealth(grpcServer, "commerce.catalog.v1.CatalogService")
 	grpc_prometheus.Register(grpcServer)
 
 	log.Printf("catalog service started addr=%s repository=%s", grpcAddr, repositoryName(repository))
-	if err := grpcServer.Serve(lis); err != nil {
-		log.Fatalf("catalog service serve failed: %v", err)
-	}
-}
-
-func validateServiceContract(service string) {
-	if err := contracts.ValidateServiceBoundaries(); err != nil {
-		log.Fatalf("service contract validation failed: %v", err)
-	}
-	if _, ok := contracts.ServiceBoundaryFor(service); !ok {
-		log.Fatalf("service contract is not defined: %s", service)
-	}
+	appkit.ServeWithShutdown(ctx, grpcServer, lis)
 }
 
 func buildRepository() catalogservice.Repository {

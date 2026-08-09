@@ -48,6 +48,7 @@
 - 统一 Catalog/Inventory 的服务发现键为 `catalog-service`、`inventory-service`，避免配置名与共享契约不一致。
 - 明确 `EventType` 与 `EventVersion` 独立演进，未知正数未来版本由消费者能力检查处理。
 - 知识库已同步统一微服务运行时、服务级消息边界和旧表停用策略，未将历史方案的过渡状态误写为当前运行时。
+- 抽取服务启动脚手架至 `shared/platform/appkit`（契约校验、etcd 注册、gRPC 健康检查、优雅停机），七个业务服务入口统一调用并删除各 `main.go` 重复实现；Catalog 补充信号优雅停机，Inventory 停止错误判断规范化。
 - 统一订单取消事件名称为 `order.cancelled.v1`，保留旧拼写的代码别名但不增加新的事件类型。
 - Gateway 的 `/api/v1/products`、`/api/v1/products/:id` 由 Catalog gRPC 提供，其他 `/api/v1` 路由同样显式调用目标服务。
 - Inventory Stream 出站事件使用 pending claim 重放，入站取消/退款事件使用 Redis Inbox 租约与已处理标记；MQ 未配置时服务安全降级，不连接任何旧队列。

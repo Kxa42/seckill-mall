@@ -18,21 +18,19 @@ import (
 	"github.com/redis/go-redis/v9"
 	"go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc"
 	"google.golang.org/grpc"
-	"google.golang.org/grpc/health"
-	"google.golang.org/grpc/health/grpc_health_v1"
 
 	"seckill-mall/services/inventory/internal/app"
 	"seckill-mall/shared/contracts"
 	"seckill-mall/shared/gen/commerce"
+	"seckill-mall/shared/platform/appkit"
 	"seckill-mall/shared/platform/config"
-	"seckill-mall/shared/platform/discovery"
 	"seckill-mall/shared/platform/messaging"
 	"seckill-mall/shared/platform/tracer"
 )
 
 func main() {
 	config.InitConfig("inventory")
-	validateServiceContract(contracts.ServiceInventory)
+	appkit.ValidateContract(contracts.ServiceInventory)
 	shutdown := tracer.InitTracer("inventory-service", tracer.EndpointFromEnv())
 	defer shutdown(context.Background())
 
@@ -60,19 +58,11 @@ func main() {
 	if serviceName == "" {
 		serviceName = contracts.ServiceInventory
 	}
-	advertiseAddr := config.Conf.Inventory.Address
-	if advertiseAddr == "" {
-		advertiseAddr = "127.0.0.1:" + port
-	}
-	advertiseAddr = config.AdvertiseAddr(advertiseAddr)
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
-	registration, err := discovery.Register(ctx, config.Conf.Etcd.Addr, serviceName, advertiseAddr)
-	if err != nil {
-		log.Printf("inventory etcd registration skipped service=%s err=%v", serviceName, err)
-	} else {
+	registration := appkit.RegisterService(ctx, serviceName, config.Conf.Inventory.Address, port)
+	if registration != nil {
 		defer func() { _ = registration.Close(context.Background()) }()
-		log.Printf("inventory registered service=%s addr=%s", serviceName, advertiseAddr)
 	}
 	startMetricsServer()
 
@@ -86,10 +76,7 @@ func main() {
 		grpc.UnaryInterceptor(grpc_prometheus.UnaryServerInterceptor),
 	)
 	pb.RegisterInventoryServiceServer(grpcServer, server)
-	healthServer := health.NewServer()
-	healthServer.SetServingStatus("", grpc_health_v1.HealthCheckResponse_SERVING)
-	healthServer.SetServingStatus("commerce.inventory.v1.InventoryService", grpc_health_v1.HealthCheckResponse_SERVING)
-	grpc_health_v1.RegisterHealthServer(grpcServer, healthServer)
+	appkit.RegisterHealth(grpcServer, "commerce.inventory.v1.InventoryService")
 	grpc_prometheus.Register(grpcServer)
 	if publisher != nil {
 		go runStreamPublisher(ctx, stream, publisher)
@@ -110,25 +97,7 @@ func main() {
 	}
 
 	log.Printf("inventory service started addr=%s store=%s", grpcAddr, storeName(store))
-	serveErr := make(chan error, 1)
-	go func() { serveErr <- grpcServer.Serve(lis) }()
-	select {
-	case err := <-serveErr:
-		if err != nil && !strings.Contains(err.Error(), "stopped") {
-			log.Fatalf("inventory service serve failed: %v", err)
-		}
-	case <-ctx.Done():
-		grpcServer.GracefulStop()
-	}
-}
-
-func validateServiceContract(service string) {
-	if err := contracts.ValidateServiceBoundaries(); err != nil {
-		log.Fatalf("service contract validation failed: %v", err)
-	}
-	if _, ok := contracts.ServiceBoundaryFor(service); !ok {
-		log.Fatalf("service contract is not defined: %s", service)
-	}
+	appkit.ServeWithShutdown(ctx, grpcServer, lis)
 }
 
 func buildStore() inventoryservice.Store {

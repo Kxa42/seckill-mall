@@ -17,6 +17,7 @@
 | 202608070731 | repository_layout_refactor | 架构重构 | ✅已完成（11完成） | [方案包](2026-08/202608070731_repository_layout_refactor/) |
 | 202608070804 | service_first_monorepo | 架构重构 | ✅已完成（14完成） | [方案包](2026-08/202608070804_service_first_monorepo/) |
 | 202608070836 | private_order_clients | 架构重构 | ✅已完成（11完成） | [方案包](2026-08/202608070836_private_order_clients/) |
+| 202608081459 | extract_appkit_scaffold | 重构 | ✅已完成（11完成） | [方案包](2026-08/202608081459_extract_appkit_scaffold/) |
 
 ## 按月归档
 
@@ -33,3 +34,4 @@
 - [202608070731_repository_layout_refactor](2026-08/202608070731_repository_layout_refactor/) - 统一 `cmd`、`internal`、契约、生成代码和平台目录，移除无引用遗留文件并通过完整工程门禁。
 - [202608070804_service_first_monorepo](2026-08/202608070804_service_first_monorepo/) - 八个服务收敛为自治目录，共享协议与平台能力迁入 `shared`，保留单 Go module 并通过完整工程、边界和 Compose 静态验收。
 - [202608070836_private_order_clients](2026-08/202608070836_private_order_clients/) - 删除共享 Order 业务客户端，Payment/Fulfillment 各自维护窄接口和 gRPC 适配器，并通过签名、deadline、边界和 Memory E2E 验证。
+- [202608081459_extract_appkit_scaffold](2026-08/202608081459_extract_appkit_scaffold/) - 抽取服务启动脚手架至 `shared/platform/appkit`，七个服务统一契约校验、etcd 注册、健康检查与优雅停机。

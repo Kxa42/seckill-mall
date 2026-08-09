@@ -4,7 +4,6 @@ package main
 
 import (
 	"context"
-	"errors"
 	"log"
 	"net"
 	"os"
@@ -16,16 +15,14 @@ import (
 	grpc_prometheus "github.com/grpc-ecosystem/go-grpc-prometheus"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
-	"google.golang.org/grpc/health"
-	"google.golang.org/grpc/health/grpc_health_v1"
 	"gorm.io/driver/mysql"
 	"gorm.io/gorm"
 
 	"seckill-mall/services/order/internal/app"
 	"seckill-mall/shared/contracts"
 	"seckill-mall/shared/gen/commerce"
+	"seckill-mall/shared/platform/appkit"
 	"seckill-mall/shared/platform/config"
-	"seckill-mall/shared/platform/discovery"
 	"seckill-mall/shared/platform/internalcall"
 	"seckill-mall/shared/platform/messaging"
 )
@@ -37,12 +34,7 @@ func main() {
 			log.Fatalf("order internal call config invalid: %v", err)
 		}
 	}
-	if err := contracts.ValidateServiceBoundaries(); err != nil {
-		log.Fatalf("service contract validation failed: %v", err)
-	}
-	if _, ok := contracts.ServiceBoundaryFor(contracts.ServiceOrder); !ok {
-		log.Fatalf("order service contract is not defined")
-	}
+	appkit.ValidateContract(contracts.ServiceOrder)
 
 	repository := buildRepository()
 	messagingRuntime := configureMessaging(repository)
@@ -72,28 +64,19 @@ func main() {
 	if serviceName == "" {
 		serviceName = contracts.ServiceOrder
 	}
-	address := config.Conf.Order.Address
-	if address == "" {
-		address = "127.0.0.1:" + port
-	}
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 	if messagingRuntime.publisher != nil {
 		defer func() { _ = messagingRuntime.publisher.Close() }()
 	}
-	registration, err := discovery.Register(ctx, config.Conf.Etcd.Addr, serviceName, config.AdvertiseAddr(address))
-	if err != nil {
-		log.Printf("order etcd registration skipped service=%s err=%v", serviceName, err)
-	} else {
+	registration := appkit.RegisterService(ctx, serviceName, config.Conf.Order.Address, port)
+	if registration != nil {
 		defer func() { _ = registration.Close(context.Background()) }()
 	}
 
 	grpcServer := grpc.NewServer(grpc.UnaryInterceptor(grpc_prometheus.UnaryServerInterceptor))
 	pb.RegisterCommerceOrderServiceServer(grpcServer, server)
-	healthServer := health.NewServer()
-	healthServer.SetServingStatus("", grpc_health_v1.HealthCheckResponse_SERVING)
-	healthServer.SetServingStatus("commerce.order.v1.CommerceOrderService", grpc_health_v1.HealthCheckResponse_SERVING)
-	grpc_health_v1.RegisterHealthServer(grpcServer, healthServer)
+	appkit.RegisterHealth(grpcServer, "commerce.order.v1.CommerceOrderService")
 	grpc_prometheus.Register(grpcServer)
 
 	go runExpiryWorker(ctx, service)
@@ -107,19 +90,7 @@ func main() {
 		go messaging.RunRabbitConsumer(ctx, config.Conf.MQ.URL, contracts.ServiceOrder, messagingRuntime.inbox, handler.Handlers(), 5)
 	}
 	log.Printf("order service started addr=%s repository=%s", listener.Addr(), repositoryName(repository))
-	serveErr := make(chan error, 1)
-	go func() { serveErr <- grpcServer.Serve(listener) }()
-	select {
-	case err := <-serveErr:
-		if err != nil && !errors.Is(err, grpc.ErrServerStopped) {
-			log.Fatalf("order service stopped: %v", err)
-		}
-	case <-ctx.Done():
-		grpcServer.GracefulStop()
-		if err := <-serveErr; err != nil && !errors.Is(err, grpc.ErrServerStopped) {
-			log.Printf("order service graceful stop: %v", err)
-		}
-	}
+	appkit.ServeWithShutdown(ctx, grpcServer, listener)
 }
 
 func runOperationWorker(ctx context.Context, service *order.Service) {

@@ -4,7 +4,6 @@ package main
 
 import (
 	"context"
-	"errors"
 	"log"
 	"net"
 	"os"
@@ -15,16 +14,14 @@ import (
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
-	"google.golang.org/grpc/health"
-	"google.golang.org/grpc/health/grpc_health_v1"
 	"gorm.io/driver/mysql"
 	"gorm.io/gorm"
 
 	"seckill-mall/services/payment/internal/app"
 	"seckill-mall/shared/contracts"
 	"seckill-mall/shared/gen/commerce"
+	"seckill-mall/shared/platform/appkit"
 	"seckill-mall/shared/platform/config"
-	"seckill-mall/shared/platform/discovery"
 	"seckill-mall/shared/platform/internalcall"
 	"seckill-mall/shared/platform/messaging"
 )
@@ -36,7 +33,7 @@ func main() {
 			log.Fatalf("payment internal call config invalid: %v", err)
 		}
 	}
-	validateContract(contracts.ServicePayment)
+	appkit.ValidateContract(contracts.ServicePayment)
 	secret := strings.TrimSpace(config.Conf.Payment.Secret)
 	if len(secret) < 32 {
 		log.Fatalf("payment secret must be at least 32 bytes")
@@ -66,13 +63,13 @@ func main() {
 	}
 	grpcServer := grpc.NewServer()
 	pb.RegisterPaymentServiceServer(grpcServer, server)
-	registerHealth(grpcServer, "commerce.payment.v1.PaymentService")
+	appkit.RegisterHealth(grpcServer, "commerce.payment.v1.PaymentService")
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 	if messagingRuntime.publisher != nil {
 		defer func() { _ = messagingRuntime.publisher.Close() }()
 	}
-	registration := registerService(ctx, contracts.ServicePayment, config.Conf.Payment.Address, port)
+	registration := appkit.RegisterService(ctx, contracts.ServicePayment, config.Conf.Payment.Address, port)
 	if registration != nil {
 		defer func() { _ = registration.Close(context.Background()) }()
 	}
@@ -85,16 +82,7 @@ func main() {
 		go messaging.RunRabbitConsumer(ctx, config.Conf.MQ.URL, contracts.ServicePayment, messagingRuntime.inbox, handler.Handlers(), 5)
 	}
 	log.Printf("payment service started addr=%s repository=%s", listener.Addr(), repositoryName(repository))
-	serveWithShutdown(ctx, grpcServer, listener)
-}
-
-func validateContract(service string) {
-	if err := contracts.ValidateServiceBoundaries(); err != nil {
-		log.Fatalf("service contract validation failed: %v", err)
-	}
-	if _, ok := contracts.ServiceBoundaryFor(service); !ok {
-		log.Fatalf("service contract is not defined: %s", service)
-	}
+	appkit.ServeWithShutdown(ctx, grpcServer, listener)
 }
 
 func buildRepository() paymentservice.Repository {
@@ -122,41 +110,6 @@ func repositoryName(repository paymentservice.Repository) string {
 		return "mysql"
 	default:
 		return "custom"
-	}
-}
-
-func registerService(ctx context.Context, service, address, port string) *discovery.Registration {
-	if strings.TrimSpace(address) == "" {
-		address = "127.0.0.1:" + port
-	}
-	registration, err := discovery.Register(ctx, config.Conf.Etcd.Addr, service, config.AdvertiseAddr(address))
-	if err != nil {
-		log.Printf("payment etcd registration skipped service=%s err=%v", service, err)
-		return nil
-	}
-	return registration
-}
-
-func registerHealth(server *grpc.Server, service string) {
-	healthServer := health.NewServer()
-	healthServer.SetServingStatus("", grpc_health_v1.HealthCheckResponse_SERVING)
-	healthServer.SetServingStatus(service, grpc_health_v1.HealthCheckResponse_SERVING)
-	grpc_health_v1.RegisterHealthServer(server, healthServer)
-}
-
-func serveWithShutdown(ctx context.Context, server *grpc.Server, listener net.Listener) {
-	serveErr := make(chan error, 1)
-	go func() { serveErr <- server.Serve(listener) }()
-	select {
-	case err := <-serveErr:
-		if err != nil && !errors.Is(err, grpc.ErrServerStopped) {
-			log.Fatalf("payment service stopped: %v", err)
-		}
-	case <-ctx.Done():
-		server.GracefulStop()
-		if err := <-serveErr; err != nil && !errors.Is(err, grpc.ErrServerStopped) {
-			log.Printf("payment service graceful stop: %v", err)
-		}
 	}
 }
 

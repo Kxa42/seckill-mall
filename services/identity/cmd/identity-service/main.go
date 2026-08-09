@@ -4,7 +4,6 @@ package main
 
 import (
 	"context"
-	"errors"
 	"log"
 	"net"
 	"os"
@@ -14,8 +13,6 @@ import (
 	"time"
 
 	"google.golang.org/grpc"
-	"google.golang.org/grpc/health"
-	"google.golang.org/grpc/health/grpc_health_v1"
 	"gorm.io/driver/mysql"
 	"gorm.io/gorm"
 
@@ -23,8 +20,8 @@ import (
 	"seckill-mall/shared/contracts"
 	"seckill-mall/shared/gen/commerce"
 	platformauth "seckill-mall/shared/platform/auth"
+	"seckill-mall/shared/platform/appkit"
 	"seckill-mall/shared/platform/config"
-	"seckill-mall/shared/platform/discovery"
 	"seckill-mall/shared/platform/internalcall"
 )
 
@@ -35,9 +32,7 @@ func main() {
 			log.Fatalf("identity internal call config invalid: %v", err)
 		}
 	}
-	if _, ok := contracts.ServiceBoundaryFor(contracts.ServiceIdentity); !ok {
-		log.Fatalf("identity service contract is not defined")
-	}
+	appkit.ValidateContract(contracts.ServiceIdentity)
 	port := config.Conf.Server.Port
 	if port == "" {
 		port = "51001"
@@ -67,41 +62,20 @@ func main() {
 	}
 	grpcServer := grpc.NewServer()
 	pb.RegisterIdentityServiceServer(grpcServer, server)
-	healthServer := health.NewServer()
-	healthServer.SetServingStatus("", grpc_health_v1.HealthCheckResponse_SERVING)
-	healthServer.SetServingStatus("commerce.identity.v1.IdentityService", grpc_health_v1.HealthCheckResponse_SERVING)
-	grpc_health_v1.RegisterHealthServer(grpcServer, healthServer)
+	appkit.RegisterHealth(grpcServer, "commerce.identity.v1.IdentityService")
 
 	serviceName := config.Conf.Identity.ServiceName
 	if serviceName == "" {
 		serviceName = contracts.ServiceIdentity
 	}
-	address := config.Conf.Identity.Address
-	if address == "" {
-		address = "127.0.0.1:" + port
-	}
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
-	registration, err := discovery.Register(ctx, config.Conf.Etcd.Addr, serviceName, config.AdvertiseAddr(address))
-	if err != nil {
-		log.Printf("identity etcd registration skipped service=%s err=%v", serviceName, err)
-	} else {
+	registration := appkit.RegisterService(ctx, serviceName, config.Conf.Identity.Address, port)
+	if registration != nil {
 		defer func() { _ = registration.Close(context.Background()) }()
 	}
 	log.Printf("identity service started addr=%s", listener.Addr())
-	serveErr := make(chan error, 1)
-	go func() { serveErr <- grpcServer.Serve(listener) }()
-	select {
-	case err := <-serveErr:
-		if err != nil && !errors.Is(err, grpc.ErrServerStopped) {
-			log.Fatalf("identity service stopped: %v", err)
-		}
-	case <-ctx.Done():
-		grpcServer.GracefulStop()
-		if err := <-serveErr; err != nil && !errors.Is(err, grpc.ErrServerStopped) {
-			log.Printf("identity service graceful stop: %v", err)
-		}
-	}
+	appkit.ServeWithShutdown(ctx, grpcServer, listener)
 }
 
 func buildRepository() identityservice.Repository {
