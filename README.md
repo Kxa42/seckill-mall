@@ -4,6 +4,8 @@
 
 ## 架构
 
+> 组件功能与关联的完整示意图见 [docs/architecture.md](docs/architecture.md)。
+
 ```text
 Gateway -> Identity / Catalog / Cart / Order / Payment / Fulfillment / Inventory (gRPC)
 Order, Payment, Fulfillment -> service-owned MySQL state + Outbox/Inbox
