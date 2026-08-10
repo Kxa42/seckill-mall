@@ -12,6 +12,7 @@ inventory:
   redis_password: ""
   redis_db: 2
   purchase_limit: 5
+  stock: {1: 100} # 初始库存，仅对不存在的键生效（SetNX 幂等），可用环境变量 SECKILL_INVENTORY_STOCK 覆盖
 
 mq:
   url: "" # 推荐通过环境变量 SECKILL_MQ_URL 注入

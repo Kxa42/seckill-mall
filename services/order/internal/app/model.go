@@ -256,7 +256,7 @@ func canTransition(from, to string) bool {
 	allowed := map[string]map[string]bool{
 		StatusPendingPayment: {StatusPaid: true, StatusCanceled: true},
 		StatusPaid:           {StatusShipped: true, StatusRefundPending: true},
-		StatusShipped:        {StatusCompleted: true},
+		StatusShipped:        {StatusCompleted: true, StatusRefundPending: true},
 		StatusRefundPending:  {StatusRefunded: true},
 	}
 	return allowed[from][to]

@@ -19,8 +19,8 @@ import (
 	"seckill-mall/services/identity/internal/app"
 	"seckill-mall/shared/contracts"
 	"seckill-mall/shared/gen/commerce"
-	platformauth "seckill-mall/shared/platform/auth"
 	"seckill-mall/shared/platform/appkit"
+	platformauth "seckill-mall/shared/platform/auth"
 	"seckill-mall/shared/platform/config"
 	"seckill-mall/shared/platform/internalcall"
 )

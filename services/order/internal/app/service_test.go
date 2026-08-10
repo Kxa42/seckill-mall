@@ -392,6 +392,34 @@ func TestPaymentAndFulfillmentTransitionsAreIdempotent(t *testing.T) {
 	}
 }
 
+func TestRefundShippedOrderFinalizesRefund(t *testing.T) {
+	inventory := newFakeInventory()
+	service, repository := newTestService(t, inventory)
+	created, _, err := service.Create(context.Background(), createCommand(OrderTypeNormal))
+	if err != nil {
+		t.Fatalf("Create() error = %v", err)
+	}
+	if _, _, err := service.ConfirmPayment(context.Background(), 9, created.OrderID, "pay-shipped-refund", "callback-shipped-refund"); err != nil {
+		t.Fatalf("ConfirmPayment() error = %v", err)
+	}
+	shipped, err := service.Ship(context.Background(), 99, created.OrderID, "SF", "SF-1")
+	if err != nil || shipped.Status != StatusShipped {
+		t.Fatalf("Ship() = %+v, err=%v", shipped, err)
+	}
+	refunded, err := service.Refund(context.Background(), 9, created.OrderID, "refund-shipped", "已发货退款")
+	if err != nil || refunded.Status != StatusRefunded {
+		t.Fatalf("Refund(shipped) = %+v, err=%v", refunded, err)
+	}
+	reservation := inventory.reservations[created.Items[0].ReservationID]
+	if reservation.Status != "restocked" || inventory.restockCalls != 1 {
+		t.Fatalf("restock state = %+v, calls=%d", reservation, inventory.restockCalls)
+	}
+	stored, err := repository.Get(context.Background(), 9, created.OrderID)
+	if err != nil || stored.Status != StatusRefunded {
+		t.Fatalf("stored refund status = %+v, err=%v", stored, err)
+	}
+}
+
 func TestRefundRestocksConfirmedReservationsBeforeCompleting(t *testing.T) {
 	inventory := newFakeInventory()
 	service, repository := newTestService(t, inventory)

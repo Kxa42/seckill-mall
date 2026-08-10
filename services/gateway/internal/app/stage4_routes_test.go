@@ -26,7 +26,6 @@ import (
 	"seckill-mall/shared/gen/commerce"
 	platformauth "seckill-mall/shared/platform/auth"
 	"seckill-mall/shared/platform/config"
-	"seckill-mall/shared/platform/utils"
 )
 
 func TestStage4CommerceFlowUsesDomainServices(t *testing.T) {
@@ -153,11 +152,8 @@ func TestStage4CommerceFlowUsesDomainServices(t *testing.T) {
 		t.Fatalf("refund response = %+v", refund)
 	}
 
-	legacyToken, err := utils.GenerateToken(1, time.Hour)
-	if err != nil {
-		t.Fatalf("GenerateToken() error = %v", err)
-	}
-	stage4Request(t, router, http.MethodGet, "/api/v1/addresses", legacyToken, nil, "", http.StatusUnauthorized)
+	// 旧格式/任意签发的令牌必须被 CommerceJWTAuth 拒绝。
+	stage4Request(t, router, http.MethodGet, "/api/v1/addresses", "invalid.token.value", nil, "", http.StatusUnauthorized)
 }
 
 func stage4Request(t *testing.T, handler http.Handler, method, path, token string, body any, idempotencyKey string, wantStatus int) map[string]any {

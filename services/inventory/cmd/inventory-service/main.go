@@ -131,6 +131,15 @@ func buildStore() inventoryservice.Store {
 	if err != nil {
 		log.Fatalf("inventory redis store create failed: %v", err)
 	}
+	seedStock := config.Conf.Inventory.Stock
+	if len(seedStock) == 0 {
+		// 与内存模式默认一致，保证 Redis 部署未配置 stock 时也能运行。
+		seedStock = map[uint64]int32{1: 100}
+	}
+	if err := store.SeedStock(context.Background(), seedStock); err != nil {
+		log.Fatalf("inventory redis stock seed failed: %v", err)
+	}
+	log.Printf("inventory redis stock seed configured skus=%d", len(seedStock))
 	return store
 }
 

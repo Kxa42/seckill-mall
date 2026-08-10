@@ -19,5 +19,6 @@
 Catalog、Identity、Inventory gRPC；MySQL 或 Memory Repository；RabbitMQ 可选。
 
 ## 变更历史
+- [202608091438_fix_core_bugs](../../history/2026-08/202608091438_fix_core_bugs/) - 修复 `shipped` 订单退款必然失败：`canTransition` 补充 `Shipped → RefundPending`，新增发货后退款全链路回归测试（根因：状态机漏记可退款状态）。
 - [202608070804_service_first_monorepo](../../history/2026-08/202608070804_service_first_monorepo/) - Order 的入口、实现、测试和配置收敛到服务自治目录。
 - [202608070731_repository_layout_refactor](../../history/2026-08/202608070731_repository_layout_refactor/) - Order 与其他领域服务统一采用内部服务目录约定。

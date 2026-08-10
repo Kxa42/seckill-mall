@@ -1,6 +1,7 @@
 package config
 
 import (
+	"encoding/json"
 	"log"
 	"os"
 	"path/filepath"
@@ -70,13 +71,14 @@ type CatalogConfig struct {
 
 // InventoryConfig 描述 Inventory/Seckill 服务自身或 Gateway 的服务发现目标。
 type InventoryConfig struct {
-	ServiceName   string `mapstructure:"service_name"`
-	Address       string `mapstructure:"address"`
-	Store         string `mapstructure:"store"`
-	RedisAddr     string `mapstructure:"redis_addr"`
-	RedisPassword string `mapstructure:"redis_password"`
-	RedisDB       int    `mapstructure:"redis_db"`
-	PurchaseLimit int32  `mapstructure:"purchase_limit"`
+	ServiceName   string           `mapstructure:"service_name"`
+	Address       string           `mapstructure:"address"`
+	Store         string           `mapstructure:"store"`
+	RedisAddr     string           `mapstructure:"redis_addr"`
+	RedisPassword string           `mapstructure:"redis_password"`
+	RedisDB       int              `mapstructure:"redis_db"`
+	PurchaseLimit int32            `mapstructure:"purchase_limit"`
+	Stock         map[uint64]int32 `mapstructure:"stock"`
 }
 
 // IdentityConfig 描述 Identity 地址快照服务自身或下游发现目标。
@@ -255,6 +257,14 @@ func applyEnvOverrides() {
 	if purchaseLimit := os.Getenv("SECKILL_INVENTORY_PURCHASE_LIMIT"); purchaseLimit != "" {
 		if parsed, err := strconv.ParseInt(purchaseLimit, 10, 32); err == nil && parsed > 0 {
 			Conf.Inventory.PurchaseLimit = int32(parsed)
+		}
+	}
+	if raw := os.Getenv("SECKILL_INVENTORY_STOCK"); raw != "" {
+		var stock map[uint64]int32
+		if err := json.Unmarshal([]byte(raw), &stock); err == nil && len(stock) > 0 {
+			Conf.Inventory.Stock = stock
+		} else {
+			log.Printf("inventory stock env ignored: invalid JSON or empty map")
 		}
 	}
 	if etcdAddr := os.Getenv("SECKILL_ETCD_ADDR"); etcdAddr != "" {

@@ -280,7 +280,7 @@ func (c *RabbitConsumer) handleDelivery(ctx context.Context, ch *amqp.Channel, c
 		return delivery.Ack(false)
 	}
 	if !claim.Claimed {
-		return delivery.Nack(false, true)
+		return c.requeueDelayed(ctx, ch, consumer, event, delivery, claim.Attempts)
 	}
 	traceCtx := tracer.ExtractAMQPHeaders(ctx, delivery.Headers)
 	if err := handler(traceCtx, event); err != nil {
@@ -297,6 +297,17 @@ func (c *RabbitConsumer) retryOrDeadLetter(ctx context.Context, ch *amqp.Channel
 	if attempt >= maxAttempts {
 		return delivery.Nack(false, false)
 	}
+	return c.publishRetry(ctx, ch, consumer, event, delivery, attempt)
+}
+
+// requeueDelayed 在 Inbox 租约被其他副本持有时延迟重投，替代立即重排以消除忙循环。
+// 该分支永不 DLQ：持有租约的副本可能正在成功处理，租约过期后 attempts 自然递增收敛。
+func (c *RabbitConsumer) requeueDelayed(ctx context.Context, ch *amqp.Channel, consumer string, event contracts.EventEnvelope, delivery amqp.Delivery, attempt int) error {
+	return c.publishRetry(ctx, ch, consumer, event, delivery, attempt)
+}
+
+// publishRetry 将事件发布到 RetryExchange 延迟重投并 Ack 原消息；发布失败时 Nack 拒绝。
+func (c *RabbitConsumer) publishRetry(ctx context.Context, ch *amqp.Channel, consumer string, event contracts.EventEnvelope, delivery amqp.Delivery, attempt int) error {
 	body, err := MarshalEnvelope(event)
 	if err != nil {
 		return delivery.Nack(false, false)
@@ -315,24 +326,3 @@ func (c *RabbitConsumer) retryOrDeadLetter(ctx context.Context, ch *amqp.Channel
 func queueName(consumer string) string      { return "commerce." + consumer + ".events" }
 func retryQueueName(consumer string) string { return "commerce." + consumer + ".retry" }
 func deadQueueName(consumer string) string  { return "commerce." + consumer + ".dlq" }
-
-func attemptFromHeaders(headers amqp.Table) int {
-	value, ok := headers["x-event-attempt"]
-	if !ok {
-		return 1
-	}
-	switch typed := value.(type) {
-	case int:
-		return typed
-	case int32:
-		return int(typed)
-	case int64:
-		return int(typed)
-	case string:
-		parsed, _ := strconv.Atoi(typed)
-		if parsed > 0 {
-			return parsed
-		}
-	}
-	return 1
-}

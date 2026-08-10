@@ -88,6 +88,42 @@ func TestMemoryStoreWritesStreamOutboxExactlyOnce(t *testing.T) {
 	}
 }
 
+func TestReleasedReservationRejectedOnIdempotentRetry(t *testing.T) {
+	store := NewMemoryStore(map[uint64]int32{7: 2}, 1)
+	command := ReserveCommand{ReservationID: "reserve-released", OrderID: "order-released", UserID: 9, SKUID: 7, Quantity: 1, Mode: "normal"}
+	first, err := store.Reserve(context.Background(), command)
+	if err != nil {
+		t.Fatalf("Reserve() error = %v", err)
+	}
+	if _, err := store.Release(context.Background(), first.ReservationID, first.OrderID); err != nil {
+		t.Fatalf("Release() error = %v", err)
+	}
+	if _, err := store.Reserve(context.Background(), command); err != ErrConflict {
+		t.Fatalf("Reserve(released retry) error = %v, want %v", err, ErrConflict)
+	}
+	if store.AvailableStock(7) != 2 {
+		t.Fatalf("stock after released retry = %d, want 2", store.AvailableStock(7))
+	}
+}
+
+func TestReleasedSeckillRequestRejectedOnIdempotentRetry(t *testing.T) {
+	store := NewMemoryStore(map[uint64]int32{8: 2}, 1)
+	command := SeckillAdmissionCommand{RequestID: "admit-released", OrderID: "order-admit", ActivityID: 100, UserID: 9, SKUID: 8, Quantity: 1}
+	first, err := store.AdmitSeckill(context.Background(), command)
+	if err != nil {
+		t.Fatalf("AdmitSeckill() error = %v", err)
+	}
+	if _, err := store.Release(context.Background(), first.ReservationID, ""); err != nil {
+		t.Fatalf("Release() error = %v", err)
+	}
+	if _, err := store.AdmitSeckill(context.Background(), command); err != ErrConflict {
+		t.Fatalf("AdmitSeckill(released retry) error = %v, want %v", err, ErrConflict)
+	}
+	if store.AvailableStock(8) != 2 {
+		t.Fatalf("stock after released retry = %d, want 2", store.AvailableStock(8))
+	}
+}
+
 func TestMemoryStoreRestockRollsBackSeckillPurchaseLimit(t *testing.T) {
 	store := NewMemoryStore(map[uint64]int32{13: 1}, 1)
 	reservation, err := store.AdmitSeckill(context.Background(), SeckillAdmissionCommand{RequestID: "refund-request", OrderID: "refund-order", ActivityID: 100, UserID: 9, SKUID: 13, Quantity: 1})

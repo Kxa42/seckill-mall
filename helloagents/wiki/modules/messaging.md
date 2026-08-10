@@ -21,6 +21,7 @@
 - RabbitMQ 真实故障注入需要 Docker；`tests/stage5_rabbitmq_e2e.sh` 会在基础设施不可用时明确跳过。
 
 ## 变更历史
+- [202608091438_fix_core_bugs](../../history/2026-08/202608091438_fix_core_bugs/) - 修复 Redis Inbox attempts 恒为 1 与消费端忙循环：`markFailed` 续租保留计数、租约过期重投递增，`!claim.Claimed` 改为延迟重投（`requeueDelayed` 永不 DLQ），与 SQL Inbox 失败语义对齐。
 - [202608070836_private_order_clients](../../history/2026-08/202608070836_private_order_clients/) - 明确共享消息层与业务客户端的边界。
 - [202608070804_service_first_monorepo](../../history/2026-08/202608070804_service_first_monorepo/) - 消息契约和运行时迁入跨服务共享层。
 - [202608070731_repository_layout_refactor](../../history/2026-08/202608070731_repository_layout_refactor/) - 消息运行时迁入统一平台目录。

@@ -136,6 +136,27 @@ func (s *RedisStore) Close() error {
 	return s.client.Close()
 }
 
+// SeedStock 以幂等方式写入初始库存：仅对不存在的 stock key 生效（SetNX），
+// 不覆盖已存在的键（含人工调库或运行中已消耗的库存）。
+func (s *RedisStore) SeedStock(ctx context.Context, stock map[uint64]int32) error {
+	if s == nil || s.client == nil {
+		return errors.New("redis store is not initialized")
+	}
+	for skuID, quantity := range stock {
+		if skuID == 0 || quantity < 0 {
+			return fmt.Errorf("invalid stock seed sku=%d quantity=%d", skuID, quantity)
+		}
+		ok, err := s.client.SetNX(ctx, s.stockKey(skuID), quantity, 0).Result()
+		if err != nil {
+			return fmt.Errorf("inventory seed sku=%d: %w", skuID, err)
+		}
+		if !ok {
+			continue
+		}
+	}
+	return nil
+}
+
 func (s *RedisStore) Reserve(ctx context.Context, command ReserveCommand) (Reservation, error) {
 	if err := validateReserveCommand(command); err != nil {
 		return Reservation{}, err
@@ -161,6 +182,9 @@ func (s *RedisStore) Reserve(ctx context.Context, command ReserveCommand) (Reser
 		return Reservation{}, err
 	}
 	if code == 10 && !sameReservation(reservation, command) {
+		return Reservation{}, ErrConflict
+	}
+	if reservation.Status != ReservationReserved {
 		return Reservation{}, ErrConflict
 	}
 	return reservation, nil
@@ -204,6 +228,9 @@ func (s *RedisStore) AdmitSeckill(ctx context.Context, command SeckillAdmissionC
 			return Reservation{}, loadErr
 		}
 		if code == 10 && (reservation.ActivityID != command.ActivityID || reservation.UserID != command.UserID || reservation.SKUID != command.SKUID || reservation.Quantity != command.Quantity || (command.OrderID != "" && reservation.OrderID != command.OrderID)) {
+			return Reservation{}, ErrConflict
+		}
+		if reservation.Status != ReservationReserved {
 			return Reservation{}, ErrConflict
 		}
 		return reservation, nil

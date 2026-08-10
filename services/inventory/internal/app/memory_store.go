@@ -46,6 +46,9 @@ func (s *MemoryStore) Reserve(_ context.Context, command ReserveCommand) (Reserv
 		if !sameReservation(existing, command) {
 			return Reservation{}, ErrConflict
 		}
+		if existing.Status != ReservationReserved {
+			return Reservation{}, ErrConflict
+		}
 		return existing, nil
 	}
 	if s.stock[command.SKUID] < command.Quantity {
@@ -157,6 +160,9 @@ func (s *MemoryStore) AdmitSeckill(_ context.Context, command SeckillAdmissionCo
 	defer s.mu.Unlock()
 	if existing, ok := s.reservations[reservationID]; ok {
 		if existing.ActivityID != command.ActivityID || existing.UserID != command.UserID || existing.SKUID != command.SKUID || existing.Quantity != command.Quantity || (command.OrderID != "" && existing.OrderID != command.OrderID) {
+			return Reservation{}, ErrConflict
+		}
+		if existing.Status != ReservationReserved {
 			return Reservation{}, ErrConflict
 		}
 		return existing, nil

@@ -54,12 +54,22 @@
 - Inventory Stream 出站事件使用 pending claim 重放，入站取消/退款事件使用 Redis Inbox 租约与已处理标记；MQ 未配置时服务安全降级，不连接任何旧队列。
 - 归档完整微服务迁移总方案和已执行阶段5方案；未执行的重复阶段5草案标记为统一方案替代并移入历史记录。
 
+### 修复
+- 修复已发货（`shipped`）订单发起退款时状态机缺少 `Shipped → RefundPending` 转换、退款必然返回 `CodeInvalidTransition` 的问题，并补充发货后退款全链路回归测试。
+- 修复 Inventory 以 Redis 存储启动时初始库存永不写入（全代码库无播种路径）、所有 SKU 恒为缺货的问题；新增 `SECKILL_INVENTORY_STOCK` 配置与启动幂等播种（SetNX，不覆盖已有库存）。
+- 修复内存/Redis Store 幂等命中分支不校验 reservation 状态、已释放的 reservation 被同一幂等键重试静默复用的问题；命中非 `reserved` 状态现返回 `ErrConflict`，并补充回归测试。
+- 修复 Redis Inbox `markFailed` 直接删除键导致 attempts 恒为 1、失败事件与 SQL Inbox 语义不一致且永不进 DLQ 的问题；改为续租保留 attempts，租约过期重投时计数递增。
+- 修复 RabbitMQ 消费端租约未到期消息 `Nack(false,true)` 立即重新入队形成约 30 秒忙循环的问题；改为延迟重投（`requeueDelayed`），失败事件按计数进入 DLQ。
+
 ### 移除
 - 移除服务优先迁移后的根级 `cmd`、`internal`、`config`、`proto`、`api` 空目录和过时 `stress_test` 程序。
 - 移除已被按服务配置替代的 `config.example.yaml`、未被入口加载的 `config/user.yaml` 和旧 `/order` HTTP 示例 `test.http`。
 - 移除已被 `shared/proto/commerce/*` 替代的旧 `proto/order.proto`、`proto/product.proto`，以及阶段 5 已覆盖的旧 Memory E2E 脚本。
 - 移除 `shared/clients/order`，不再在共享层保存 Order 业务客户端和联合业务模型。
 - 移除不含跟踪文件的旧服务、集中 Worker 和过渡模块空目录。
+- 移除 Gateway Sentinel 限流（`middleware/sentinel.go`、`app/sentinel.go`、`initSentinel` 调用与 sentinel-golang 依赖）。
+- 移除无路由挂载的 Gateway `JWTAuth` 中间件、`shared/platform/utils` JWT 工具与可为任意 userID 签发旧格式 token 的 debug `POST /login` 路由。
+- 移除 payment/fulfillment 事件处理器中只写不读的 `pending` 集合与 `PendingOrder()`，以及 `rabbit.go` 中无引用的 `attemptFromHeaders`。
 
 ## [0.1.0] - 2026-08-05
 

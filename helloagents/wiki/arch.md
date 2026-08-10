@@ -77,5 +77,8 @@ flowchart LR
 | ADR-004 | 统一入口、服务实现、契约与平台层目录 | 2026-08-07 | ✅采纳 |
 | ADR-005 | 采用服务优先单仓库并保留单 Go module | 2026-08-07 | ✅采纳 |
 | ADR-006 | Order 客户端适配器归属消费者服务 | 2026-08-07 | ✅采纳 |
+| ADR-007 | Inventory 幂等命中须校验 reservation 状态，非 `reserved` 返回冲突 | 2026-08-09 | ✅采纳 |
+| ADR-008 | Redis Inbox 失败语义对齐 SQL Inbox：attempts 持久化，5 次进 DLQ | 2026-08-09 | ✅采纳 |
 
 目录分层设计见 [ADR-004](../history/2026-08/202608070731_repository_layout_refactor/how.md#adr-004-统一单仓库服务目录与平台层)；服务优先设计见 [ADR-005](../history/2026-08/202608070804_service_first_monorepo/how.md#adr-005-采用服务优先单仓库并保留单-go-module)；客户端边界见 [ADR-006](../history/2026-08/202608070836_private_order_clients/how.md#adr-006-order-客户端适配器归属消费者服务)。
+库存幂等状态校验见 [ADR-007](../history/2026-08/202608091438_fix_core_bugs/how.md#三bug2-已释放-reservation-拒绝幂等复用)；Redis Inbox 失败语义见 [ADR-008](../history/2026-08/202608091438_fix_core_bugs/how.md#四bug3-消息重试计数与忙循环)。

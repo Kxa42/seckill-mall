@@ -19,5 +19,6 @@
 - 实现位于 `services/inventory/internal/app`，本地配置位于 `services/inventory/etc`。
 
 ## 变更历史
+- [202608091438_fix_core_bugs](../../history/2026-08/202608091438_fix_core_bugs/) - 修复 Redis 启动无播种导致恒缺货（新增 `SECKILL_INVENTORY_STOCK` 配置与 SetNX 幂等播种）；修复幂等命中不校验状态、已释放 reservation 被静默复用（非 `reserved` 返回 `ErrConflict`）；Redis Inbox `markFailed` 不再 DEL，attempts 持久化并对齐 SQL Inbox 语义。
 - [202608070804_service_first_monorepo](../../history/2026-08/202608070804_service_first_monorepo/) - Inventory 的入口、实现、测试和配置收敛到服务自治目录。
 - [202608070731_repository_layout_refactor](../../history/2026-08/202608070731_repository_layout_refactor/) - Inventory 实现迁入统一内部服务目录。

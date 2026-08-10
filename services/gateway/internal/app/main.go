@@ -25,9 +25,6 @@ func Run() {
 	shutdown := tracer.InitTracer("api-gateway", tracer.EndpointFromEnv())
 	defer shutdown(context.Background())
 
-	// 初始化 Sentinel
-	initSentinel()
-
 	clients := initGRPCClients()
 	r := setupRouter(clients)
 	startHTTPServer(r)
