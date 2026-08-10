@@ -19,6 +19,8 @@
 | 202608070836 | private_order_clients | 架构重构 | ✅已完成（11完成） | [方案包](2026-08/202608070836_private_order_clients/) |
 | 202608081459 | extract_appkit_scaffold | 重构 | ✅已完成（11完成） | [方案包](2026-08/202608081459_extract_appkit_scaffold/) |
 | 202608091438 | fix_core_bugs | 修复 | ✅已完成（26完成） | [方案包](2026-08/202608091438_fix_core_bugs/) |
+| 202608100829 | architecture_diagram | 文档 | ✅已完成（轻量迭代） | [方案包](2026-08/202608100829_architecture_diagram/) |
+| 202608100839 | service_layout_cleanup | 重构 | ✅已完成（轻量迭代） | [方案包](2026-08/202608100839_service_layout_cleanup/) |
 
 ## 按月归档
 
@@ -37,3 +39,5 @@
 - [202608070836_private_order_clients](2026-08/202608070836_private_order_clients/) - 删除共享 Order 业务客户端，Payment/Fulfillment 各自维护窄接口和 gRPC 适配器，并通过签名、deadline、边界和 Memory E2E 验证。
 - [202608081459_extract_appkit_scaffold](2026-08/202608081459_extract_appkit_scaffold/) - 抽取服务启动脚手架至 `shared/platform/appkit`，七个服务统一契约校验、etcd 注册、健康检查与优雅停机。
 - [202608091438_fix_core_bugs](2026-08/202608091438_fix_core_bugs/) - 修复四个核心缺陷（发货后退款、Redis 库存播种、reservation 幂等状态校验、Inbox 重试计数/忙循环）并按序移除无引用死代码；全仓 build/vet/race/边界/Memory E2E 通过。
+- [202608100829_architecture_diagram](2026-08/202608100829_architecture_diagram/) - 新增架构示意图文档，覆盖组件功能、gRPC/事件关联、数据所有权与秒杀链路时序。
+- [202608100839_service_layout_cleanup](2026-08/202608100839_service_layout_cleanup/) - 统一 Cart/Payment/Fulfillment/Identity 内部文件组织为模型/接口/服务/存储分层，行为不变，全仓门禁通过。

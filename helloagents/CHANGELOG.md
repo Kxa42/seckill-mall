@@ -7,6 +7,7 @@
 ## [Unreleased]
 
 ### 新增
+- 新增 `docs/architecture.md` 架构示意图：Mermaid 总体架构图、事件路由图、秒杀核心链路时序图，以及组件功能、gRPC 关联、数据所有权清单。
 - 新增 `Makefile`，统一 Protobuf 生成、格式检查、包枚举、单元测试、vet 和 Memory E2E 入口。
 - 新增独立 Identity、Cart、Payment、Fulfillment gRPC 服务、Memory/MySQL Repository、服务入口和阶段 4 Gateway `/api/v1` 路由。
 - 新增阶段 4 内部 HMAC 调用认证、商城 JWT 严格校验、Payment 回调/退款幂等、Fulfillment 发货/收货幂等和 `payments.user_id` migration。
@@ -27,6 +28,7 @@
 - 新增 Catalog/Inventory 的 bufconn Fake E2E，覆盖商品查询、库存预占状态机、重复命令、秒杀限购与释放回滚。
 
 ### 变更
+- 重构 Cart、Payment、Fulfillment、Identity 服务内部文件组织：拆分 `model.go`/`repository.go`/`service.go`/`memory_repository.go`/`mysql_repository.go`，与 Catalog、Order、Inventory 分层保持一致；行为与接口不变。
 - 仓库演进为服务优先单仓库：八个服务分别拥有 `services/<service>/cmd`、私有 `internal`、`etc` 和可选 `testkit`，同时保留单一 `go.mod`。
 - 跨服务契约、Protobuf、生成代码、客户端和平台能力收敛到 `shared`；migration 工具迁入 `tools/migrate`，SQL migration 版本路径保持不变。
 - 新增编译与脚本边界门禁，禁止生产代码跨服务导入 `internal`/`testkit`，并禁止 `shared` 反向依赖 `services`。

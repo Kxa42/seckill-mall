@@ -9,6 +9,10 @@ import (
 	"seckill-mall/shared/gen/commerce"
 )
 
+type CatalogClient interface {
+	GetSKUSnapshot(ctx context.Context, skuIDs []uint64, includeInactive bool) ([]SKU, error)
+}
+
 type GRPCCatalogClient struct{ client pb.CatalogServiceClient }
 
 func NewGRPCCatalogClient(client pb.CatalogServiceClient) *GRPCCatalogClient {
