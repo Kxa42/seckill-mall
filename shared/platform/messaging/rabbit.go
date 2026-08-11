@@ -354,47 +354,50 @@ func (c *RabbitConsumer) handleDelivery(ctx context.Context, ch *amqp.Channel, c
 	if err != nil {
 		return delivery.Nack(false, false)
 	}
-	// 2. 过滤：未知事件类型（可能来自旧版本）直接 Ack 丢弃。
-	if !contracts.IsKnownEventType(event.EventType) {
+	// 2. 过滤：未知事件类型（可能来自旧版本）、未来版本或未注册 Handler 直接 Ack 丢弃，
+	//    不执行业务也不进 DLQ，保证新旧事件平滑演进。
+	handler := lookupHandler(event, handlers)
+	if handler == nil {
 		return delivery.Ack(false)
 	}
-	// 3. 过滤：当前架构只支持 v1 事件，更高版本 Ack 丢弃（不消费）。
-	if event.EventVersion > 1 {
-		return delivery.Ack(false)
-	}
-	// 4. 过滤：本消费者没有注册该事件的 Handler，Ack 丢弃（不是我们的业务）。
-	handler, ok := handlers[event.EventType]
-	if !ok {
-		return delivery.Ack(false)
-	}
-	// 5. Inbox 幂等抢占：以 (consumer, event_id) 插入/更新记录并获取 30s 租约。
+	// 3. Inbox 幂等抢占：以 (consumer, event_id) 插入/更新记录并获取 30s 租约。
 	//    这是"防止重复处理"的第一道闸：只有抢到租约的副本才允许执行业务。
 	claim, err := inbox.Claim(ctx, consumer, event, 30*time.Second)
 	if err != nil {
 		return c.retryOrDeadLetter(ctx, ch, consumer, event, delivery, 1, maxAttempts, err)
 	}
-	// 6. 已处理过：幂等命中，Ack 跳过。
+	// 4. 已处理过：幂等命中，Ack 跳过。
 	if claim.Processed {
 		return delivery.Ack(false)
 	}
-	// 7. 未抢到租约（其他副本正在处理）：延迟重投，稍后再试。
+	// 5. 未抢到租约（其他副本正在处理）：延迟重投，稍后再试。
 	if !claim.Claimed {
 		return c.requeueDelayed(ctx, ch, consumer, event, delivery, claim.Attempts)
 	}
-	// 8. 从消息头恢复链路追踪上下文，让业务处理挂在原始调用链上。
+	// 6. 从消息头恢复链路追踪上下文，让业务处理挂在原始调用链上。
 	traceCtx := tracer.ExtractAMQPHeaders(ctx, delivery.Headers)
-	// 9. 执行真正的业务处理。
+	// 7. 执行真正的业务处理。
 	if err := handler(traceCtx, event); err != nil {
 		// 失败：记录失败原因（状态留在 processing，靠租约过期重试），再走重试/DLQ 流程。
 		_ = inbox.MarkFailed(ctx, consumer, event.EventID, err.Error())
 		return c.retryOrDeadLetter(ctx, ch, consumer, event, delivery, claim.Attempts, maxAttempts, err)
 	}
-	// 10. 成功：先落幂等终态（processed），再 Ack。
+	// 8. 成功：先落幂等终态（processed），再 Ack。
 	//     若 MarkProcessed 失败也走重试，避免"业务已处理但幂等没记上"导致重复消费。
 	if err := inbox.MarkProcessed(ctx, consumer, event.EventID); err != nil {
 		return c.retryOrDeadLetter(ctx, ch, consumer, event, delivery, claim.Attempts, maxAttempts, err)
 	}
 	return delivery.Ack(false)
+}
+
+// lookupHandler 返回本消费者为事件注册的 Handler。
+// 未知事件类型（可能来自旧版本）和高于当前支持的版本被安全忽略，未注册类型返回 nil，
+// 调用方据此直接 Ack 丢弃，避免新事件把旧消费者打入 DLQ。
+func lookupHandler(event contracts.EventEnvelope, handlers map[string]Handler) Handler {
+	if !contracts.IsKnownEventType(event.EventType) || event.EventVersion > 1 {
+		return nil
+	}
+	return handlers[event.EventType]
 }
 
 // retryOrDeadLetter 决定失败消息的出路：未达上限 → 进重试队列；已达上限 → Nack 不重投，

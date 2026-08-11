@@ -89,15 +89,43 @@ func TestMemoryOutboxAndInboxAreIdempotent(t *testing.T) {
 	}
 }
 
-func TestDispatchWithInboxIsolatesFutureVersion(t *testing.T) {
-	store := NewMemoryStore()
+func TestLookupHandlerIsolatesFutureVersion(t *testing.T) {
 	event, err := contracts.NewEventEnvelope("evt-future", contracts.EventOrderCreated, "order", "ord-1", 2, contracts.OrderCreatedPayload{OrderID: "ord-1", UserID: 9, TotalAmountCents: 100, Items: []contracts.OrderItemPayload{{SKUID: 1, Quantity: 1}}}, time.Now())
 	if err != nil {
 		t.Fatal(err)
 	}
-	called := false
-	err = DispatchWithInbox(context.Background(), store.Inbox(), contracts.ServicePayment, event, map[string]Handler{contracts.EventOrderCreated: func(context.Context, contracts.EventEnvelope) error { called = true; return nil }})
-	if err != nil || called {
-		t.Fatalf("future event dispatch = err=%v called=%v", err, called)
+	handlers := map[string]Handler{contracts.EventOrderCreated: func(context.Context, contracts.EventEnvelope) error { return nil }}
+	if handler := lookupHandler(event, handlers); handler != nil {
+		t.Fatalf("future version event must be ignored, got handler=%v", handler)
+	}
+}
+
+func TestLookupHandlerFiltersUnknownAndUnregistered(t *testing.T) {
+	registered := func(context.Context, contracts.EventEnvelope) error { return nil }
+	handlers := map[string]Handler{contracts.EventOrderCreated: registered}
+	now := time.Now()
+
+	unknown, err := contracts.NewEventEnvelope("evt-unknown", "future.event.v1", "order", "ord-1", 1, contracts.OrderCreatedPayload{OrderID: "ord-1", UserID: 9, TotalAmountCents: 100, Items: []contracts.OrderItemPayload{{SKUID: 1, Quantity: 1}}}, now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if handler := lookupHandler(unknown, handlers); handler != nil {
+		t.Fatalf("unknown event type must be ignored, got handler=%v", handler)
+	}
+
+	known, err := contracts.NewEventEnvelope("evt-known", contracts.EventOrderCreated, "order", "ord-1", 1, contracts.OrderCreatedPayload{OrderID: "ord-1", UserID: 9, TotalAmountCents: 100, Items: []contracts.OrderItemPayload{{SKUID: 1, Quantity: 1}}}, now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if handler := lookupHandler(known, handlers); handler == nil {
+		t.Fatal("registered event must return its handler")
+	}
+
+	unregistered, err := contracts.NewEventEnvelope("evt-unregistered", contracts.EventShipmentDelivered, "order", "ord-1", 1, contracts.ShipmentPayload{OrderID: "ord-1", Carrier: "carrier", TrackingNo: "tn-1", Status: "delivered"}, now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if handler := lookupHandler(unregistered, handlers); handler != nil {
+		t.Fatalf("unregistered event type must be ignored, got handler=%v", handler)
 	}
 }

@@ -195,6 +195,6 @@ flowchart TD
 | 重试退避计算 | `shared/platform/messaging/types.go:135` |
 | SQL Outbox / Inbox | `shared/platform/messaging/sql_store.go` |
 | Outbox Relayer 轮询 | `shared/platform/messaging/worker.go` |
-| 幂等消费公共流程 | `shared/platform/messaging/dispatch.go` |
+| 幂等消费公共流程 | `shared/platform/messaging/rabbit.go`（`handleDelivery`/`lookupHandler`） |
 | Outbox/Inbox 表结构 | `migrations/004_stage5_messaging.sql` |
 | Inventory Redis Stream → RabbitMQ 桥 | `services/inventory/cmd/inventory-service/main.go` |

@@ -402,7 +402,7 @@ RabbitMQ 单队列 + 单消费者时，同一队列内消息按发布顺序投�
 | Memory Outbox/Inbox（本地开发） | `shared/platform/messaging/memory_store.go` |
 | Outbox Relayer 轮询 | `shared/platform/messaging/worker.go` |
 | 消费者断线重连 | `shared/platform/messaging/runtime.go` |
-| 幂等消费公共流程 | `shared/platform/messaging/dispatch.go` |
+| 幂等消费公共流程 | `shared/platform/messaging/rabbit.go`（`handleDelivery`/`lookupHandler`） |
 | 事件信封与事件类型 | `shared/contracts/events.go`、`payloads.go` |
 | 服务边界与事件路由注册 | `shared/contracts/boundaries.go` |
 | Redis Lua 状态机 + Stream Outbox | `services/inventory/internal/app/redis_store.go` |
