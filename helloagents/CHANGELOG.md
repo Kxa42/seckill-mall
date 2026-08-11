@@ -55,6 +55,7 @@
 - 抽取服务启动脚手架至 `shared/platform/appkit`（契约校验、etcd 注册、gRPC 健康检查、优雅停机），七个业务服务入口统一调用并删除各 `main.go` 重复实现；Catalog 补充信号优雅停机，Inventory 停止错误判断规范化。
 - 抽取服务级消息运行时至 `shared/platform/messaging/service_runtime.go`，统一 Order/Payment/Fulfillment 的 Outbox/Inbox/Publisher/worker 装配与关闭逻辑，删除三处本地重复 `messageRuntime` 实现。
 - 移除无生产调用的 `DispatchWithInbox` 死代码，消费过滤决策提取为 `lookupHandler` 供 `handleDelivery` 与测试共用，并迁移未来版本隔离回归测试。
+- 清理全仓死代码：删除 `httpx.NoContent`、`FakeBroker.Close`（含关联 `closed` 状态与发布检查）、Order 内部认证遗留包装 `AppendSignedMetadata`/`AppendSignedRoleMetadata` 与 `internalSignatureKey`、`contracts.ServiceBoundaries`；相关测试迁移至 `internalcall` 与 `serviceBoundaryCatalog`。
 - `shared/platform/appkit` 增加 HTTP 有界停机与 metrics 生命周期脚手架；Gateway 改用 signal context、HTTP shutdown，并在退出时显式关闭全部 gRPC 连接与 etcd 客户端。
 - 移除 Gateway 遗留 debug 登录配置字段（`jwt.expire`）与过时注释语义，同步 `gateway.yaml` 与 `commerce-services.example.yaml`；Memory Repository 事件落库改传调用方 context。
 - 统一订单取消事件名称为 `order.cancelled.v1`，保留旧拼写的代码别名但不增加新的事件类型。

@@ -2,8 +2,6 @@
 package httpx
 
 import (
-	"net/http"
-
 	"github.com/gin-gonic/gin"
 )
 
@@ -42,9 +40,4 @@ func RequestID(c *gin.Context) string {
 		}
 	}
 	return c.GetHeader("X-Request-ID")
-}
-
-// NoContent 返回无响应体成功状态。
-func NoContent(c *gin.Context) {
-	c.Status(http.StatusNoContent)
 }

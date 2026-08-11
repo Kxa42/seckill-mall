@@ -11,18 +11,9 @@ import (
 )
 
 const (
-	internalSignatureKey = internalcall.SignatureKey
-	systemActorID        = internalcall.SystemActorID
-	systemRole           = internalcall.SystemRole
+	systemActorID = internalcall.SystemActorID
+	systemRole    = internalcall.SystemRole
 )
-
-func AppendSignedMetadata(ctx context.Context, secret, method string, userID uint64, now time.Time) context.Context {
-	return internalcall.AppendUser(ctx, secret, method, userID, now)
-}
-
-func AppendSignedRoleMetadata(ctx context.Context, secret, method string, userID uint64, role string, now time.Time) context.Context {
-	return internalcall.AppendRole(ctx, secret, method, userID, role, now)
-}
 
 func AuthorizeInternalRequest(ctx context.Context, method string, userID uint64) error {
 	return internalcall.AuthorizeUser(ctx, strings.TrimSpace(os.Getenv("SECKILL_INTERNAL_CALL_SECRET")), method, userID, time.Now())

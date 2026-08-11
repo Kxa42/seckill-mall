@@ -13,7 +13,6 @@ import (
 type FakeBroker struct {
 	mu       sync.Mutex
 	messages []contracts.EventEnvelope
-	closed   bool
 }
 
 func NewFakeBroker() *FakeBroker { return &FakeBroker{} }
@@ -24,9 +23,6 @@ func (b *FakeBroker) Publish(_ context.Context, event contracts.EventEnvelope, _
 	}
 	b.mu.Lock()
 	defer b.mu.Unlock()
-	if b.closed {
-		return context.Canceled
-	}
 	b.messages = append(b.messages, event)
 	return nil
 }
@@ -38,12 +34,6 @@ func (b *FakeBroker) Messages() []contracts.EventEnvelope {
 	items := make([]contracts.EventEnvelope, len(b.messages))
 	copy(items, b.messages)
 	return items
-}
-
-func (b *FakeBroker) Close() {
-	b.mu.Lock()
-	b.closed = true
-	b.mu.Unlock()
 }
 
 // Dispatch 将消息按顺序交给处理器，返回第一个失败。

@@ -77,9 +77,8 @@ func TestServiceBoundariesHaveExclusiveDataOwnership(t *testing.T) {
 		t.Fatalf("ValidateServiceBoundaries() error = %v", err)
 	}
 
-	boundaries := ServiceBoundaries()
-	if len(boundaries) != 7 {
-		t.Fatalf("expected 7 business service boundaries, got %d", len(boundaries))
+	if len(serviceBoundaryCatalog) != 7 {
+		t.Fatalf("expected 7 business service boundaries, got %d", len(serviceBoundaryCatalog))
 	}
 
 	order, ok := ServiceBoundaryFor(ServiceOrder)

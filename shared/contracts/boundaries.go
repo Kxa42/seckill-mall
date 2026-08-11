@@ -55,15 +55,6 @@ var serviceBoundaryCatalog = []ServiceBoundary{
 	},
 }
 
-// ServiceBoundaries 返回服务边界的副本，调用方修改结果不会影响全局契约。
-func ServiceBoundaries() []ServiceBoundary {
-	boundaries := make([]ServiceBoundary, len(serviceBoundaryCatalog))
-	for i, boundary := range serviceBoundaryCatalog {
-		boundaries[i] = cloneBoundary(boundary)
-	}
-	return boundaries
-}
-
 // ServiceBoundaryFor 返回指定业务服务的边界定义。
 func ServiceBoundaryFor(service string) (ServiceBoundary, bool) {
 	for _, boundary := range serviceBoundaryCatalog {
