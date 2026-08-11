@@ -26,7 +26,7 @@ func (r *MemoryRepository) SetEventSink(sink messaging.EventSink) { r.eventSink 
 
 func trackingKey(carrier, number string) string { return carrier + ":" + number }
 
-func (r *MemoryRepository) Create(_ context.Context, value Shipment, _ time.Time) (Shipment, bool, error) {
+func (r *MemoryRepository) Create(ctx context.Context, value Shipment, _ time.Time) (Shipment, bool, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	if existing, ok := r.shipments[value.OrderID]; ok {
@@ -44,7 +44,7 @@ func (r *MemoryRepository) Create(_ context.Context, value Shipment, _ time.Time
 		if err != nil {
 			return Shipment{}, false, err
 		}
-		if err := r.eventSink.AppendEvent(context.Background(), event, nil); err != nil {
+		if err := r.eventSink.AppendEvent(ctx, event, nil); err != nil {
 			return Shipment{}, false, err
 		}
 	}
@@ -64,7 +64,7 @@ func (r *MemoryRepository) Get(_ context.Context, orderID string) (Shipment, err
 	return value, nil
 }
 
-func (r *MemoryRepository) MarkReceived(_ context.Context, orderID string, now time.Time) (Shipment, bool, error) {
+func (r *MemoryRepository) MarkReceived(ctx context.Context, orderID string, now time.Time) (Shipment, bool, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	value, ok := r.shipments[orderID]
@@ -80,7 +80,7 @@ func (r *MemoryRepository) MarkReceived(_ context.Context, orderID string, now t
 		if err != nil {
 			return Shipment{}, false, err
 		}
-		if err := r.eventSink.AppendEvent(context.Background(), event, nil); err != nil {
+		if err := r.eventSink.AppendEvent(ctx, event, nil); err != nil {
 			return Shipment{}, false, err
 		}
 	}

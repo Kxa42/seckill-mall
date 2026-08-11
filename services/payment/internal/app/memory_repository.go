@@ -48,7 +48,7 @@ func (r *MemoryRepository) Get(_ context.Context, paymentNo string) (Payment, er
 	return value, nil
 }
 
-func (r *MemoryRepository) MarkSucceeded(_ context.Context, paymentNo, callbackRef string, now time.Time) (Payment, bool, error) {
+func (r *MemoryRepository) MarkSucceeded(ctx context.Context, paymentNo, callbackRef string, now time.Time) (Payment, bool, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	value, ok := r.payments[paymentNo]
@@ -69,7 +69,7 @@ func (r *MemoryRepository) MarkSucceeded(_ context.Context, paymentNo, callbackR
 		if err != nil {
 			return Payment{}, false, err
 		}
-		if err := r.eventSink.AppendEvent(context.Background(), event, nil); err != nil {
+		if err := r.eventSink.AppendEvent(ctx, event, nil); err != nil {
 			return Payment{}, false, err
 		}
 	}
@@ -103,7 +103,7 @@ func (r *MemoryRepository) FindRefundByOrder(_ context.Context, userID uint64, o
 	return value, true, nil
 }
 
-func (r *MemoryRepository) CreateRefund(_ context.Context, value Refund, _ time.Time) (Refund, bool, error) {
+func (r *MemoryRepository) CreateRefund(ctx context.Context, value Refund, _ time.Time) (Refund, bool, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	if no, ok := r.refundByOrder[value.OrderID]; ok {
@@ -114,7 +114,7 @@ func (r *MemoryRepository) CreateRefund(_ context.Context, value Refund, _ time.
 		if err != nil {
 			return Refund{}, false, err
 		}
-		if err := r.eventSink.AppendEvent(context.Background(), event, nil); err != nil {
+		if err := r.eventSink.AppendEvent(ctx, event, nil); err != nil {
 			return Refund{}, false, err
 		}
 	}

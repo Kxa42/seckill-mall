@@ -5,6 +5,7 @@
 ## 架构
 
 > 组件功能与关联的完整示意图见 [docs/architecture.md](docs/architecture.md)。
+> Redis 与 RabbitMQ 的实现与工业化设计解读见 [docs/redis-rabbitmq.md](docs/redis-rabbitmq.md)。
 
 ```text
 Gateway -> Identity / Catalog / Cart / Order / Payment / Fulfillment / Inventory (gRPC)

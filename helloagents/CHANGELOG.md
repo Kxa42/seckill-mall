@@ -7,6 +7,8 @@
 ## [Unreleased]
 
 ### 新增
+- 新增 `docs/messaging-topology.md`：RabbitMQ 投递全景图（交换机/队列拓扑、事件级 fan-out、Outbox 发送侧与重试/DLQ 消费侧流程、参数速查与代码索引）。
+- 新增 `docs/redis-rabbitmq.md`：结合项目实现解读 Redis（Lua 库存状态机、Stream Outbox/Inbox）与 RabbitMQ（Outbox 模式、Publisher Confirm、重试/DLQ、幂等消费）及工业化设计要点。
 - 新增 `docs/architecture.md` 架构示意图：Mermaid 总体架构图、事件路由图、秒杀核心链路时序图，以及组件功能、gRPC 关联、数据所有权清单。
 - 新增 `Makefile`，统一 Protobuf 生成、格式检查、包枚举、单元测试、vet 和 Memory E2E 入口。
 - 新增独立 Identity、Cart、Payment、Fulfillment gRPC 服务、Memory/MySQL Repository、服务入口和阶段 4 Gateway `/api/v1` 路由。
@@ -51,6 +53,9 @@
 - 明确 `EventType` 与 `EventVersion` 独立演进，未知正数未来版本由消费者能力检查处理。
 - 知识库已同步统一微服务运行时、服务级消息边界和旧表停用策略，未将历史方案的过渡状态误写为当前运行时。
 - 抽取服务启动脚手架至 `shared/platform/appkit`（契约校验、etcd 注册、gRPC 健康检查、优雅停机），七个业务服务入口统一调用并删除各 `main.go` 重复实现；Catalog 补充信号优雅停机，Inventory 停止错误判断规范化。
+- 抽取服务级消息运行时至 `shared/platform/messaging/service_runtime.go`，统一 Order/Payment/Fulfillment 的 Outbox/Inbox/Publisher/worker 装配与关闭逻辑，删除三处本地重复 `messageRuntime` 实现。
+- `shared/platform/appkit` 增加 HTTP 有界停机与 metrics 生命周期脚手架；Gateway 改用 signal context、HTTP shutdown，并在退出时显式关闭全部 gRPC 连接与 etcd 客户端。
+- 移除 Gateway 遗留 debug 登录配置字段（`jwt.expire`）与过时注释语义，同步 `gateway.yaml` 与 `commerce-services.example.yaml`；Memory Repository 事件落库改传调用方 context。
 - 统一订单取消事件名称为 `order.cancelled.v1`，保留旧拼写的代码别名但不增加新的事件类型。
 - Gateway 的 `/api/v1/products`、`/api/v1/products/:id` 由 Catalog gRPC 提供，其他 `/api/v1` 路由同样显式调用目标服务。
 - Inventory Stream 出站事件使用 pending claim 重放，入站取消/退款事件使用 Redis Inbox 租约与已处理标记；MQ 未配置时服务安全降级，不连接任何旧队列。
@@ -62,6 +67,9 @@
 - 修复内存/Redis Store 幂等命中分支不校验 reservation 状态、已释放的 reservation 被同一幂等键重试静默复用的问题；命中非 `reserved` 状态现返回 `ErrConflict`，并补充回归测试。
 - 修复 Redis Inbox `markFailed` 直接删除键导致 attempts 恒为 1、失败事件与 SQL Inbox 语义不一致且永不进 DLQ 的问题；改为续租保留 attempts，租约过期重投时计数递增。
 - 修复 RabbitMQ 消费端租约未到期消息 `Nack(false,true)` 立即重新入队形成约 30 秒忙循环的问题；改为延迟重投（`requeueDelayed`），失败事件按计数进入 DLQ。
+- 修复 SQL/Memory Outbox 发布链路：`OutboxEvent.Envelope()` 使用分列元数据与业务 payload 重建完整信封并兼容历史完整信封记录，发布 worker 不再按整信封解码业务 payload。
+- 修复 SQL Outbox claim 返回的 attempts 与数据库已写入值不一致、Memory claim 先截断后排序受 map 随机顺序影响的确定性问题，并隔离保存的可变 headers 引用；补齐回归测试。
+- RabbitMQ 消费失败转投 retry 队列增加 broker deferred confirm，确认成功后才 Ack 原消息；转投失败保留原消息重投，消除连接异常窗口的丢消息风险。
 
 ### 移除
 - 移除服务优先迁移后的根级 `cmd`、`internal`、`config`、`proto`、`api` 空目录和过时 `stress_test` 程序。

@@ -148,7 +148,7 @@ func (s *SQLOutboxStore) Claim(ctx context.Context, now time.Time, limit int, le
 	}
 	items := make([]OutboxEvent, 0, len(records))
 	for _, record := range records {
-		items = append(items, outboxFromRecord(record))
+		items = append(items, claimedOutboxFromRecord(record, now, lease))
 	}
 	return items, nil
 }
@@ -206,6 +206,14 @@ func (s *SQLInboxStore) MarkFailed(ctx context.Context, consumer, eventID, reaso
 
 func outboxFromRecord(record sqlOutboxRecord) OutboxEvent {
 	return OutboxEvent{ID: record.ID, EventID: record.EventID, AggregateType: record.AggregateType, AggregateID: record.AggregateID, EventType: record.EventType, EventVersion: record.EventVersion, Payload: append([]byte(nil), record.Payload...), Headers: parseHeaders(record.Headers), Status: record.Status, Attempts: record.Attempts, NextRetryAt: record.NextRetryAt, LastError: record.LastError, CreatedAt: record.CreatedAt, UpdatedAt: record.UpdatedAt}
+}
+
+func claimedOutboxFromRecord(record sqlOutboxRecord, now time.Time, lease time.Duration) OutboxEvent {
+	record.Status = StatusPublishing
+	record.Attempts++
+	record.NextRetryAt = now.Add(lease)
+	record.UpdatedAt = now
+	return outboxFromRecord(record)
 }
 
 func (e OutboxEvent) HeadersBytes() []byte {

@@ -6,14 +6,12 @@ import (
 	"context"
 	"log"
 	"net"
-	"net/http"
 	"os"
 	"os/signal"
 	"strings"
 	"syscall"
 
 	grpc_prometheus "github.com/grpc-ecosystem/go-grpc-prometheus"
-	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc"
 	"google.golang.org/grpc"
 	"gorm.io/driver/mysql"
@@ -55,7 +53,7 @@ func main() {
 	if registration != nil {
 		defer func() { _ = registration.Close(context.Background()) }()
 	}
-	startMetricsServer()
+	metricsDone := appkit.StartMetricsServer(ctx, config.Conf.Server.MetricsPort)
 
 	server, err := catalogservice.NewServer(repository)
 	if err != nil {
@@ -72,6 +70,7 @@ func main() {
 
 	log.Printf("catalog service started addr=%s repository=%s", grpcAddr, repositoryName(repository))
 	appkit.ServeWithShutdown(ctx, grpcServer, lis)
+	<-metricsDone
 }
 
 func buildRepository() catalogservice.Repository {
@@ -100,20 +99,4 @@ func repositoryName(repository catalogservice.Repository) string {
 	default:
 		return "custom"
 	}
-}
-
-func startMetricsServer() {
-	port := strings.TrimSpace(config.Conf.Server.MetricsPort)
-	if port == "" {
-		return
-	}
-	go func() {
-		mux := http.NewServeMux()
-		mux.Handle("/metrics", promhttp.Handler())
-		addr := net.JoinHostPort("", port)
-		log.Printf("catalog metrics server started addr=%s", addr)
-		if err := http.ListenAndServe(addr, mux); err != nil {
-			log.Printf("catalog metrics server stopped err=%v", err)
-		}
-	}()
 }

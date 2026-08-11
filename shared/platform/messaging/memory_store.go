@@ -48,7 +48,7 @@ func (s *MemoryStore) AppendEvent(_ context.Context, event contracts.EventEnvelo
 	if _, exists := s.outbox[event.EventID]; exists {
 		return nil
 	}
-	s.outbox[event.EventID] = OutboxEvent{ID: s.nextID, EventID: event.EventID, AggregateType: event.AggregateType, AggregateID: event.AggregateID, EventType: event.EventType, EventVersion: event.EventVersion, Payload: append([]byte(nil), event.Payload...), Headers: headers, Status: StatusPending, NextRetryAt: now, CreatedAt: now, UpdatedAt: now}
+	s.outbox[event.EventID] = OutboxEvent{ID: s.nextID, EventID: event.EventID, AggregateType: event.AggregateType, AggregateID: event.AggregateID, EventType: event.EventType, EventVersion: event.EventVersion, Payload: append([]byte(nil), event.Payload...), Headers: cloneAMQPTable(headers), Status: StatusPending, NextRetryAt: now, CreatedAt: now, UpdatedAt: now}
 	s.nextID++
 	return nil
 }
@@ -62,19 +62,37 @@ func (s *MemoryOutboxStore) Claim(_ context.Context, now time.Time, limit int, l
 	}
 	s.store.mu.Lock()
 	defer s.store.mu.Unlock()
-	values := make([]OutboxEvent, 0, limit)
+	candidates := make([]OutboxEvent, 0, len(s.store.outbox))
 	for _, value := range s.store.outbox {
-		if len(values) >= limit || (value.Status != StatusPending && value.Status != StatusPublishing) || value.NextRetryAt.After(now) {
+		if (value.Status != StatusPending && value.Status != StatusPublishing) || value.NextRetryAt.After(now) {
 			continue
 		}
+		candidates = append(candidates, value)
+	}
+	sort.Slice(candidates, func(i, j int) bool {
+		if !candidates[i].NextRetryAt.Equal(candidates[j].NextRetryAt) {
+			return candidates[i].NextRetryAt.Before(candidates[j].NextRetryAt)
+		}
+		if !candidates[i].CreatedAt.Equal(candidates[j].CreatedAt) {
+			return candidates[i].CreatedAt.Before(candidates[j].CreatedAt)
+		}
+		if candidates[i].ID != candidates[j].ID {
+			return candidates[i].ID < candidates[j].ID
+		}
+		return candidates[i].EventID < candidates[j].EventID
+	})
+	if len(candidates) > limit {
+		candidates = candidates[:limit]
+	}
+	values := make([]OutboxEvent, 0, len(candidates))
+	for _, value := range candidates {
 		value.Status = StatusPublishing
 		value.Attempts++
 		value.NextRetryAt = now.Add(lease)
 		value.UpdatedAt = now
 		s.store.outbox[value.EventID] = value
-		values = append(values, value)
+		values = append(values, cloneOutboxEvent(value))
 	}
-	sort.Slice(values, func(i, j int) bool { return values[i].CreatedAt.Before(values[j].CreatedAt) })
 	return values, nil
 }
 
@@ -158,11 +176,50 @@ func (s *MemoryStore) OutboxEvents() []OutboxEvent {
 	defer s.mu.Unlock()
 	values := make([]OutboxEvent, 0, len(s.outbox))
 	for _, value := range s.outbox {
-		value.Payload = append([]byte(nil), value.Payload...)
-		values = append(values, value)
+		values = append(values, cloneOutboxEvent(value))
 	}
 	sort.Slice(values, func(i, j int) bool { return values[i].ID < values[j].ID })
 	return values
+}
+
+func cloneOutboxEvent(value OutboxEvent) OutboxEvent {
+	value.Payload = append([]byte(nil), value.Payload...)
+	value.Headers = cloneAMQPTable(value.Headers)
+	return value
+}
+
+func cloneAMQPTable(headers amqp.Table) amqp.Table {
+	if headers == nil {
+		return nil
+	}
+	cloned := make(amqp.Table, len(headers))
+	for key, value := range headers {
+		cloned[key] = cloneAMQPHeaderValue(value)
+	}
+	return cloned
+}
+
+func cloneAMQPHeaderValue(value any) any {
+	switch typed := value.(type) {
+	case []byte:
+		return append([]byte(nil), typed...)
+	case amqp.Table:
+		return cloneAMQPTable(typed)
+	case map[string]any:
+		cloned := make(map[string]any, len(typed))
+		for key, item := range typed {
+			cloned[key] = cloneAMQPHeaderValue(item)
+		}
+		return cloned
+	case []any:
+		cloned := make([]any, len(typed))
+		for index, item := range typed {
+			cloned[index] = cloneAMQPHeaderValue(item)
+		}
+		return cloned
+	default:
+		return value
+	}
 }
 
 var _ EventSink = (*MemoryStore)(nil)

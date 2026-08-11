@@ -37,15 +37,14 @@ type GatewayDefinition struct {
 	EtcdAddr    string `mapstructure:"etcd_addr"`
 	// MetricsPort 为可选；留空则不启动独立 metrics server。
 	MetricsPort string `mapstructure:"metrics_port"`
-	// Mode 控制 debug 路由（如本地模拟登录）；留空按 release 处理。
+	// Mode 控制本地与 release 启动校验；留空按 release 处理。
 	Mode string `mapstructure:"mode"`
-	// JWT 为可选；本地调试登录需要 Expire 与 Secret。
+	// JWT 为可选；Secret 用于校验 Identity Service 签发的令牌。
 	JWT GatewayJWTDefinition `mapstructure:"jwt"`
 }
 
-// GatewayJWTDefinition 仅保留 Gateway 本地调试登录所需的 JWT 字段。
+// GatewayJWTDefinition 描述 Gateway 校验访问令牌所需的配置。
 type GatewayJWTDefinition struct {
-	Expire string `mapstructure:"expire"`
 	Secret string `mapstructure:"secret"`
 }
 
@@ -87,7 +86,6 @@ func LoadServiceRuntimeConfig(path, role string) (*Config, error) {
 			MetricsPort: strings.TrimSpace(manifest.Gateway.MetricsPort),
 		}
 		cfg.Etcd.Addr = manifest.Gateway.EtcdAddr
-		cfg.JWT.Expire = strings.TrimSpace(manifest.Gateway.JWT.Expire)
 		cfg.JWT.Secret = strings.TrimSpace(manifest.Gateway.JWT.Secret)
 		for _, serviceRole := range []string{"identity", "catalog", "inventory", "cart", "order", "payment", "fulfillment"} {
 			definition, ok := manifest.Services[serviceRole]
@@ -298,11 +296,8 @@ func expandGatewayDefinition(definition *GatewayDefinition) error {
 		}
 		*value = expanded
 	}
-	// gateway metrics_port 与 jwt 凭据均为可选。
+	// gateway metrics_port 与 JWT 校验密钥均为可选。
 	if err := expandOptionalField("gateway metrics_port", &definition.MetricsPort); err != nil {
-		return err
-	}
-	if err := expandOptionalField("gateway jwt.expire", &definition.JWT.Expire); err != nil {
 		return err
 	}
 	if err := expandOptionalField("gateway jwt.secret", &definition.JWT.Secret); err != nil {

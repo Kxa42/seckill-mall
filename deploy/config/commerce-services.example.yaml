@@ -77,10 +77,9 @@ gateway:
   etcd_addr: 127.0.0.1:2379
   # metrics_port 为可选，留空则不启动独立 metrics server。
   metrics_port: "9090"
-  # mode 留空按 release 处理；debug 模式注册本地模拟登录路由。
+  # mode 留空按 release 处理。
   mode: "debug"
-  # JWT 为可选；仅 debug 模式本地模拟登录需要 expire 与 secret。
+  # Gateway 仅校验 Identity Service 签发的令牌；令牌过期时间由 Identity Service 决定。
   jwt:
-    expire: "24h"
     secret: "${SECKILL_JWT_SECRET}"
   # Gateway 只调用服务，不配置任何业务数据库 DSN。

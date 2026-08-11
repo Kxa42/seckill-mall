@@ -38,6 +38,9 @@ func main() {
 
 	repository := buildRepository()
 	messagingRuntime := configureMessaging(repository)
+	if messagingRuntime != nil {
+		defer func() { _ = messagingRuntime.Close() }()
+	}
 	connections := dialDependencies()
 	defer func() {
 		for _, connection := range connections {
@@ -66,9 +69,6 @@ func main() {
 	}
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
-	if messagingRuntime.publisher != nil {
-		defer func() { _ = messagingRuntime.publisher.Close() }()
-	}
 	registration := appkit.RegisterService(ctx, serviceName, config.Conf.Order.Address, port)
 	if registration != nil {
 		defer func() { _ = registration.Close(context.Background()) }()
@@ -81,13 +81,12 @@ func main() {
 
 	go runExpiryWorker(ctx, service)
 	go runOperationWorker(ctx, service)
-	if messagingRuntime.publisher != nil {
-		go messaging.RunOutboxPublisher(ctx, messagingRuntime.outbox, messagingRuntime.publisher, time.Second, 100)
+	if messagingRuntime != nil && messagingRuntime.Enabled() {
 		handler, handlerErr := order.NewEventHandler(service)
 		if handlerErr != nil {
 			log.Fatalf("order event handler create failed: %v", handlerErr)
 		}
-		go messaging.RunRabbitConsumer(ctx, config.Conf.MQ.URL, contracts.ServiceOrder, messagingRuntime.inbox, handler.Handlers(), 5)
+		messagingRuntime.Start(ctx, contracts.ServiceOrder, handler.Handlers())
 	}
 	log.Printf("order service started addr=%s repository=%s", listener.Addr(), repositoryName(repository))
 	appkit.ServeWithShutdown(ctx, grpcServer, listener)
@@ -181,33 +180,21 @@ func repositoryName(repository order.Repository) string {
 	}
 }
 
-type messageRuntime struct {
-	outbox    messaging.OutboxStore
-	inbox     messaging.InboxStore
-	publisher *messaging.RabbitPublisher
-}
-
-func configureMessaging(repository order.Repository) messageRuntime {
-	var outbox messaging.OutboxStore
-	var inbox messaging.InboxStore
+func configureMessaging(repository order.Repository) *messaging.ServiceRuntime {
 	switch value := repository.(type) {
 	case *order.MemoryRepository:
-		store := messaging.NewMemoryStore()
-		value.SetEventSink(store)
-		outbox, inbox = store.Outbox(), store.Inbox()
-	case *order.MySQLRepository:
-		store, err := messaging.NewSQLStore(value.Database(), "order_outbox_events", "order_inbox_events")
+		runtime, err := messaging.NewMemoryServiceRuntime(value, config.Conf.MQ.URL)
 		if err != nil {
-			log.Fatalf("order message store create failed: %v", err)
+			log.Fatalf("order message runtime create failed: %v", err)
 		}
-		value.SetEventSink(store)
-		outbox, inbox = store.Outbox(), store.Inbox()
+		return runtime
+	case *order.MySQLRepository:
+		runtime, err := messaging.NewSQLServiceRuntime(value, value.Database(), "order_outbox_events", "order_inbox_events", config.Conf.MQ.URL)
+		if err != nil {
+			log.Fatalf("order message runtime create failed: %v", err)
+		}
+		return runtime
 	default:
-		return messageRuntime{}
+		return nil
 	}
-	runtime := messageRuntime{outbox: outbox, inbox: inbox}
-	if strings.TrimSpace(config.Conf.MQ.URL) != "" {
-		runtime.publisher = messaging.NewRabbitPublisher(config.Conf.MQ.URL)
-	}
-	return runtime
 }

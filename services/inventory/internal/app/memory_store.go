@@ -36,7 +36,7 @@ func NewMemoryStore(stock map[uint64]int32, purchaseLimit int32) *MemoryStore {
 	return &MemoryStore{stock: copyStock, reservations: make(map[string]Reservation), purchased: make(map[string]int32), purchaseLimit: purchaseLimit, now: func() time.Time { return time.Now().UTC() }}
 }
 
-func (s *MemoryStore) Reserve(_ context.Context, command ReserveCommand) (Reservation, error) {
+func (s *MemoryStore) Reserve(ctx context.Context, command ReserveCommand) (Reservation, error) {
 	if err := validateReserveCommand(command); err != nil {
 		return Reservation{}, err
 	}
@@ -56,7 +56,7 @@ func (s *MemoryStore) Reserve(_ context.Context, command ReserveCommand) (Reserv
 	}
 	now := s.now()
 	reservation := Reservation{ReservationID: command.ReservationID, OrderID: command.OrderID, UserID: command.UserID, SKUID: command.SKUID, Quantity: command.Quantity, Status: ReservationReserved, Mode: command.Mode, CreatedAt: now, UpdatedAt: now}
-	if err := s.appendEvent(context.Background(), contracts.EventInventoryReserved, reservation, now); err != nil {
+	if err := s.appendEvent(ctx, contracts.EventInventoryReserved, reservation, now); err != nil {
 		return Reservation{}, err
 	}
 	s.stock[command.SKUID] -= command.Quantity
@@ -87,7 +87,7 @@ func (s *MemoryStore) Confirm(_ context.Context, reservationID, orderID string) 
 	}
 }
 
-func (s *MemoryStore) Release(_ context.Context, reservationID, orderID string) (Reservation, error) {
+func (s *MemoryStore) Release(ctx context.Context, reservationID, orderID string) (Reservation, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	reservation, err := s.findReservation(reservationID, orderID)
@@ -100,7 +100,7 @@ func (s *MemoryStore) Release(_ context.Context, reservationID, orderID string) 
 	case ReservationReserved:
 		reservation.Status = ReservationReleased
 		reservation.UpdatedAt = s.now()
-		if err := s.appendEvent(context.Background(), contracts.EventInventoryReleased, reservation, reservation.UpdatedAt); err != nil {
+		if err := s.appendEvent(ctx, contracts.EventInventoryReleased, reservation, reservation.UpdatedAt); err != nil {
 			return Reservation{}, err
 		}
 		s.stock[reservation.SKUID] += reservation.Quantity
@@ -120,7 +120,7 @@ func (s *MemoryStore) Release(_ context.Context, reservationID, orderID string) 
 
 // Restock 将已确认的库存 reservation 以幂等方式恢复到可用库存。
 // 它与 Release 分离，避免支付前取消误恢复已确认库存。
-func (s *MemoryStore) Restock(_ context.Context, reservationID, orderID string) (Reservation, error) {
+func (s *MemoryStore) Restock(ctx context.Context, reservationID, orderID string) (Reservation, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	reservation, err := s.findReservation(reservationID, orderID)
@@ -133,7 +133,7 @@ func (s *MemoryStore) Restock(_ context.Context, reservationID, orderID string) 
 	case ReservationConfirmed:
 		reservation.Status = ReservationRestocked
 		reservation.UpdatedAt = s.now()
-		if err := s.appendEvent(context.Background(), contracts.EventInventoryRestocked, reservation, reservation.UpdatedAt); err != nil {
+		if err := s.appendEvent(ctx, contracts.EventInventoryRestocked, reservation, reservation.UpdatedAt); err != nil {
 			return Reservation{}, err
 		}
 		s.stock[reservation.SKUID] += reservation.Quantity
@@ -151,7 +151,7 @@ func (s *MemoryStore) Restock(_ context.Context, reservationID, orderID string) 
 	}
 }
 
-func (s *MemoryStore) AdmitSeckill(_ context.Context, command SeckillAdmissionCommand) (Reservation, error) {
+func (s *MemoryStore) AdmitSeckill(ctx context.Context, command SeckillAdmissionCommand) (Reservation, error) {
 	if !validOpaqueID(command.RequestID) || command.ActivityID == 0 || command.UserID == 0 || command.SKUID == 0 || command.Quantity <= 0 {
 		return Reservation{}, ErrInvalidRequest
 	}
@@ -176,10 +176,10 @@ func (s *MemoryStore) AdmitSeckill(_ context.Context, command SeckillAdmissionCo
 	}
 	now := s.now()
 	reservation := Reservation{ReservationID: reservationID, OrderID: command.OrderID, UserID: command.UserID, ActivityID: command.ActivityID, SKUID: command.SKUID, Quantity: command.Quantity, Status: ReservationReserved, Mode: "seckill", CreatedAt: now, UpdatedAt: now}
-	if err := s.appendEvent(context.Background(), contracts.EventSeckillAccepted, reservation, now); err != nil {
+	if err := s.appendEvent(ctx, contracts.EventSeckillAccepted, reservation, now); err != nil {
 		return Reservation{}, err
 	}
-	if err := s.appendEvent(context.Background(), contracts.EventInventoryReserved, reservation, now); err != nil {
+	if err := s.appendEvent(ctx, contracts.EventInventoryReserved, reservation, now); err != nil {
 		return Reservation{}, err
 	}
 	s.stock[command.SKUID] -= command.Quantity

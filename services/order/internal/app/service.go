@@ -41,17 +41,29 @@ func (s *Service) SetRPCTimeout(timeout time.Duration) {
 }
 
 func (s *Service) Create(ctx context.Context, command CreateCommand) (result Order, reused bool, resultErr error) {
+	// ===== 阶段 1：幂等键规范化与入参校验 =====
+	// 先做纯本地校验（用户/地址/订单类型/Idempotency-Key/商品数量/秒杀约束），
+	// 校验失败属于客户端错误，直接返回，不写任何意图、不产生任何副作用。
 	command.IdempotencyKey = strings.TrimSpace(command.IdempotencyKey)
 	if err := validateCreate(command); err != nil {
 		return Order{}, false, err
 	}
+	// ===== 阶段 2：请求摘要 digest =====
+	// 对"用户 + 地址 + 订单类型 + 活动 + 全部 SKU:数量"做 SHA-256，
+	// 用于识别"同一个 Idempotency-Key 但请求参数不同"的非法重复请求。
 	digest := requestDigest(command)
+	// ===== 阶段 3：幂等查找——订单已存在则直接复用 =====
+	// FindByIdempotency 按 (UserID, IdempotencyKey) 查询是否已创建过订单；
+	// found=true 表示上次请求已成功落库（例如客户端超时后重试）。
 	if existing, found, err := s.repository.FindByIdempotency(ctx, command.UserID, command.IdempotencyKey); err != nil {
 		return Order{}, false, err
 	} else if found {
+		// 同键不同参数：拒绝复用，避免返回与本次请求不一致的订单。
 		if existing.RequestDigest != digest {
 			return Order{}, false, NewError(CodeConflict, "Idempotency-Key 对应的请求参数不一致", nil)
 		}
+		// 若存在未完成的创建意图（上次可能在预占/落库中途崩溃），
+		// 本次已确认订单存在，把意图标记为 done 收尾，避免恢复 worker 再次重放。
 		intent, intentFound, intentErr := s.repository.FindCreateIntent(ctx, command.UserID, command.IdempotencyKey)
 		if intentErr != nil {
 			return Order{}, false, intentErr
@@ -67,32 +79,49 @@ func (s *Service) Create(ctx context.Context, command CreateCommand) (result Ord
 				return Order{}, false, err
 			}
 		}
+		// reused=true 通知调用方：本次是幂等复用，订单并非新建。
 		return existing, true, nil
 	}
+	// ===== 阶段 4：创建意图 CreateIntent——崩溃恢复的载体 =====
+	// 意图在调用任何下游 RPC 之前落库，持久化"该订单正在创建中"的事实；
+	// 若进程中途崩溃，RecoverCreateIntents 会读取意图并重放整个 Create，
+	// 由于订单号与 reservation ID 都是确定性的，重放不会产生重复事实。
 	existingIntent, intentFound, err := s.repository.FindCreateIntent(ctx, command.UserID, command.IdempotencyKey)
 	if err != nil {
 		return Order{}, false, err
+		// 同一幂等键的既有意图参数不一致：拒绝继续。
 	} else if intentFound && existingIntent.RequestDigest != digest {
 		return Order{}, false, NewError(CodeConflict, "Idempotency-Key 对应的创建意图参数不一致", nil)
 	}
+	// 自动重试已达 8 次上限，不再重放，转人工排查。
 	if intentFound && existingIntent.Attempts >= maxCreateIntentAttempts {
 		return Order{}, false, NewError(CodeUnavailable, "订单创建意图已达到重试上限", nil)
 	}
 
 	now := s.now()
+	// ===== 阶段 5：确定性订单号 =====
+	// 订单号由 (UserID, IdempotencyKey, digest) 哈希得出：
+	// 同一请求无论重试多少次、是否跨进程，订单号永远相同，
+	// 这是"重放安全"的关键——后续库存预占、订单落库都以该订单号为锚。
 	orderID := deterministicOrderID(command.UserID, command.IdempotencyKey, digest)
+	// 序列化原始请求，供恢复 worker 读取完整参数重放。
 	payload, err := json.Marshal(command)
 	if err != nil {
 		return Order{}, false, err
 	}
+	// 若已有失败意图，继承其尝试次数，保证总次数跨重试连续累加。
 	attempts := 0
 	if intentFound {
 		attempts = existingIntent.Attempts
 	}
 	intent := CreateIntent{IntentID: "intent_" + strings.TrimPrefix(orderID, "ord_"), UserID: command.UserID, IdempotencyKey: command.IdempotencyKey, RequestDigest: digest, OrderID: orderID, Status: CreateIntentStarted, Attempts: attempts, Payload: string(payload), NextRetryAt: now, CreatedAt: now, UpdatedAt: now}
+	// 先落意图、再调下游：保证"创建中"状态在任何副作用发生之前持久化。
 	if err := s.repository.SaveCreateIntent(ctx, intent); err != nil {
 		return Order{}, false, err
 	}
+	// ===== 阶段 6：defer 收尾——无论成败都更新意图 =====
+	// 成功 → done；失败 → failed、Attempts+1、记录错误并设置下次重试时间，
+	// RecoverCreateIntents 据此决定何时重放（指数退避）。
 	defer func() {
 		intent.UpdatedAt = s.now()
 		if resultErr != nil {
@@ -106,6 +135,9 @@ func (s *Service) Create(ctx context.Context, command CreateCommand) (result Ord
 		}
 		_ = s.repository.UpdateCreateIntent(context.Background(), intent)
 	}()
+	// ===== 阶段 7：统一 RPC 超时 =====
+	// 以下所有下游调用共享一个 2s（可配）超时上下文，
+	// 避免单个下游慢响应拖垮整个创建流程。
 	items := append([]CreateItem(nil), command.Items...)
 	sort.Slice(items, func(i, j int) bool { return items[i].SKUID < items[j].SKUID })
 	itemIDs := make([]uint64, 0, len(items))
@@ -115,6 +147,8 @@ func (s *Service) Create(ctx context.Context, command CreateCommand) (result Ord
 
 	ctx, cancel := context.WithTimeout(ctx, s.rpcTimeout)
 	defer cancel()
+	// ===== 阶段 8：获取商品与地址快照 =====
+	// 快照把"下单时的价格/名称/库存"冻结进订单，避免后续改价影响已下单。
 	skus, err := s.catalog.GetSKUSnapshot(ctx, itemIDs)
 	if err != nil {
 		return Order{}, false, err
@@ -127,6 +161,7 @@ func (s *Service) Create(ctx context.Context, command CreateCommand) (result Ord
 	if err != nil {
 		return Order{}, false, err
 	}
+	// 地址归属校验：快照必须属于当前用户，防止 A 用户拿 B 的地址下单。
 	if address.ID != command.AddressID || address.UserID != command.UserID {
 		return Order{}, false, NewError(CodeForbidden, "收货地址不属于当前用户", nil)
 	}
@@ -134,6 +169,9 @@ func (s *Service) Create(ctx context.Context, command CreateCommand) (result Ord
 	orderItems := make([]Item, 0, len(items))
 	reservations := make([]Reservation, 0, len(items))
 	var total int64
+	// ===== 阶段 9：逐 SKU 核价 + 库存预占 =====
+	// 对每个商品：校验 SKU 存在且上架 → 计算小计与累计金额（含溢出保护）→
+	// 调用 Inventory 预占库存（秒杀走 AdmitSeckill 含限购，普通订单走 Reserve）。
 	for _, requested := range items {
 		sku, ok := byID[requested.SKUID]
 		if !ok || !sku.Active {
@@ -147,6 +185,7 @@ func (s *Service) Create(ctx context.Context, command CreateCommand) (result Ord
 		if err != nil {
 			return Order{}, false, err
 		}
+		// reservation ID 同样确定性生成：同一订单重试时预占幂等，不会重复扣库存。
 		reservationID := fmt.Sprintf("res_%s_%d", orderID, requested.SKUID)
 		reserveCommand := ReserveCommand{ReservationID: reservationID, OrderID: orderID, UserID: command.UserID, ActivityID: command.ActivityID, SKUID: requested.SKUID, Quantity: requested.Quantity, Mode: command.OrderType}
 		var reservation Reservation
@@ -156,6 +195,7 @@ func (s *Service) Create(ctx context.Context, command CreateCommand) (result Ord
 			reservation, err = s.inventory.Reserve(ctx, reserveCommand)
 		}
 		if err != nil {
+			// 本商品预占失败：逆序释放前面已成功的预占，保证不泄漏库存。
 			s.compensateReservations(ctx, orderID, reservations)
 			return Order{}, false, err
 		}
@@ -163,9 +203,12 @@ func (s *Service) Create(ctx context.Context, command CreateCommand) (result Ord
 		orderItems = append(orderItems, Item{SKUID: sku.ID, SKUCode: sku.Code, SKUName: sku.Name, UnitPriceCents: sku.PriceCents, Quantity: requested.Quantity, SubtotalCents: lineTotal, ReservationID: reservation.ReservationID})
 	}
 
+	// ===== 阶段 10：组装订单领域对象并落库 =====
+	// 初始状态 pending_payment，带确定性过期时间（orderTTL，到期由 Expire 任务关闭）。
 	order := Order{OrderID: orderID, UserID: command.UserID, AddressID: command.AddressID, OrderType: command.OrderType, Status: StatusPendingPayment, TotalAmountCents: total, IdempotencyKey: command.IdempotencyKey, RequestDigest: digest, AddressSnapshot: address, Items: orderItems, ExpiresAt: now.Add(s.orderTTL), CreatedAt: now, UpdatedAt: now, StatusHistory: []StatusHistory{{ToStatus: StatusPendingPayment, Reason: "创建订单", ActorType: "user", ActorID: command.UserID, CreatedAt: now}}}
 	created, reused, err := s.repository.Create(ctx, order)
 	if err != nil {
+		// 落库失败（如瞬时 DB 错误）：释放全部预占，意图会由恢复 worker 重试。
 		s.compensateReservations(ctx, orderID, reservations)
 		return Order{}, false, err
 	}

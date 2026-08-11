@@ -21,6 +21,8 @@
 | 202608091438 | fix_core_bugs | 修复 | ✅已完成（26完成） | [方案包](2026-08/202608091438_fix_core_bugs/) |
 | 202608100829 | architecture_diagram | 文档 | ✅已完成（轻量迭代） | [方案包](2026-08/202608100829_architecture_diagram/) |
 | 202608100839 | service_layout_cleanup | 重构 | ✅已完成（轻量迭代） | [方案包](2026-08/202608100839_service_layout_cleanup/) |
+| 202608100911 | redis_rabbitmq_guide | 文档 | ✅已完成（轻量迭代） | [方案包](2026-08/202608100911_redis_rabbitmq_guide/) |
+| 202608101524 | project_quality_hardening | 修复/重构 | ✅已完成（23完成/2备注） | [方案包](2026-08/202608101524_project_quality_hardening/) |
 
 ## 按月归档
 
@@ -41,3 +43,5 @@
 - [202608091438_fix_core_bugs](2026-08/202608091438_fix_core_bugs/) - 修复四个核心缺陷（发货后退款、Redis 库存播种、reservation 幂等状态校验、Inbox 重试计数/忙循环）并按序移除无引用死代码；全仓 build/vet/race/边界/Memory E2E 通过。
 - [202608100829_architecture_diagram](2026-08/202608100829_architecture_diagram/) - 新增架构示意图文档，覆盖组件功能、gRPC/事件关联、数据所有权与秒杀链路时序。
 - [202608100839_service_layout_cleanup](2026-08/202608100839_service_layout_cleanup/) - 统一 Cart/Payment/Fulfillment/Identity 内部文件组织为模型/接口/服务/存储分层，行为不变，全仓门禁通过。
+- [202608100911_redis_rabbitmq_guide](2026-08/202608100911_redis_rabbitmq_guide/) - 新增 Redis 与 RabbitMQ 深度解读文档，覆盖 Outbox/Inbox、Publisher Confirm、重试/DLQ 与 Redis Lua 热路径。
+- [202608101524_project_quality_hardening](2026-08/202608101524_project_quality_hardening/) - 质量加固：修复 Outbox 信封重建发布链路、SQL/Memory claim 确定性与 retry deferred confirm；抽取服务级消息运行时，appkit 增加 HTTP/metrics 生命周期，Gateway 显式关闭 gRPC/etcd 客户端并清理 debug 登录配置；全仓 race/vet/边界/Memory E2E 通过，RabbitMQ 真实集成因 Docker 不可用跳过。

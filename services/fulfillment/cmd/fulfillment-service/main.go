@@ -10,7 +10,6 @@ import (
 	"os/signal"
 	"strings"
 	"syscall"
-	"time"
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
@@ -40,6 +39,9 @@ func main() {
 	}
 	repository := buildRepository()
 	messagingRuntime := configureMessaging(repository)
+	if messagingRuntime != nil {
+		defer func() { _ = messagingRuntime.Close() }()
+	}
 	connection, err := grpc.Dial(config.Conf.Order.Address, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
 		log.Fatalf("fulfillment order dial failed: %v", err)
@@ -62,20 +64,16 @@ func main() {
 	appkit.RegisterHealth(grpcServer, "commerce.fulfillment.v1.FulfillmentService")
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
-	if messagingRuntime.publisher != nil {
-		defer func() { _ = messagingRuntime.publisher.Close() }()
-	}
 	registration := appkit.RegisterService(ctx, contracts.ServiceFulfillment, config.Conf.Fulfillment.Address, port)
 	if registration != nil {
 		defer func() { _ = registration.Close(context.Background()) }()
 	}
-	if messagingRuntime.publisher != nil {
-		go messaging.RunOutboxPublisher(ctx, messagingRuntime.outbox, messagingRuntime.publisher, time.Second, 100)
+	if messagingRuntime != nil && messagingRuntime.Enabled() {
 		handler, handlerErr := fulfillmentservice.NewEventHandler(service)
 		if handlerErr != nil {
 			log.Fatalf("fulfillment event handler create failed: %v", handlerErr)
 		}
-		go messaging.RunRabbitConsumer(ctx, config.Conf.MQ.URL, contracts.ServiceFulfillment, messagingRuntime.inbox, handler.Handlers(), 5)
+		messagingRuntime.Start(ctx, contracts.ServiceFulfillment, handler.Handlers())
 	}
 	log.Printf("fulfillment service started addr=%s repository=%s", listener.Addr(), repositoryName(repository))
 	appkit.ServeWithShutdown(ctx, grpcServer, listener)
@@ -109,33 +107,21 @@ func repositoryName(repository fulfillmentservice.Repository) string {
 	}
 }
 
-type messageRuntime struct {
-	outbox    messaging.OutboxStore
-	inbox     messaging.InboxStore
-	publisher *messaging.RabbitPublisher
-}
-
-func configureMessaging(repository fulfillmentservice.Repository) messageRuntime {
-	var outbox messaging.OutboxStore
-	var inbox messaging.InboxStore
+func configureMessaging(repository fulfillmentservice.Repository) *messaging.ServiceRuntime {
 	switch value := repository.(type) {
 	case *fulfillmentservice.MemoryRepository:
-		store := messaging.NewMemoryStore()
-		value.SetEventSink(store)
-		outbox, inbox = store.Outbox(), store.Inbox()
-	case *fulfillmentservice.MySQLRepository:
-		store, err := messaging.NewSQLStore(value.Database(), "fulfillment_outbox_events", "fulfillment_inbox_events")
+		runtime, err := messaging.NewMemoryServiceRuntime(value, config.Conf.MQ.URL)
 		if err != nil {
-			log.Fatalf("fulfillment message store create failed: %v", err)
+			log.Fatalf("fulfillment message runtime create failed: %v", err)
 		}
-		value.SetEventSink(store)
-		outbox, inbox = store.Outbox(), store.Inbox()
+		return runtime
+	case *fulfillmentservice.MySQLRepository:
+		runtime, err := messaging.NewSQLServiceRuntime(value, value.Database(), "fulfillment_outbox_events", "fulfillment_inbox_events", config.Conf.MQ.URL)
+		if err != nil {
+			log.Fatalf("fulfillment message runtime create failed: %v", err)
+		}
+		return runtime
 	default:
-		return messageRuntime{}
+		return nil
 	}
-	runtime := messageRuntime{outbox: outbox, inbox: inbox}
-	if strings.TrimSpace(config.Conf.MQ.URL) != "" {
-		runtime.publisher = messaging.NewRabbitPublisher(config.Conf.MQ.URL)
-	}
-	return runtime
 }

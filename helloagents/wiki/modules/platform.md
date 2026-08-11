@@ -6,7 +6,7 @@
 ## 模块概述
 - **职责:** 环境配置、bcrypt/JWT、内部 HMAC、请求 ID、统一响应、migration runner、Dockerfile、Compose 和 Prometheus 抓取。
 - **状态:** ✅阶段 5 统一运行时
-- **最后更新:** 2026-08-07
+- **最后更新:** 2026-08-11
 
 ## 规范
 
@@ -41,6 +41,7 @@
 - 未设置 `SECKILL_SERVICES_CONFIG` 时，各服务使用自身 `services/<service>/etc/<service>.yaml` 配置；统一模板位于 `deploy/config/commerce-services.example.yaml`。
 
 ## 变更历史
+- [202608101524_project_quality_hardening](../../history/2026-08/202608101524_project_quality_hardening/) - `shared/platform/appkit` 增加 HTTP 有界停机（`ServeHTTPWithShutdown`）与 metrics 生命周期（`StartMetricsServer`）脚手架；Memory Repository 事件落库改传调用方 context，补齐 HTTP 停机与消息运行时启停测试。
 - [202608091438_fix_core_bugs](../../history/2026-08/202608091438_fix_core_bugs/) - `InventoryConfig` 新增 `Stock map[uint64]int32`（`SECKILL_INVENTORY_STOCK` JSON 解析），支撑 Redis 库存启动播种；`rabbit.go` 租约未到期改为延迟重投并移除无引用的 `attemptFromHeaders`；`shared/platform/utils` JWT 工具随 Gateway 死代码整体移除。
 - [202608070804_service_first_monorepo](../../history/2026-08/202608070804_service_first_monorepo/) - 平台能力迁入共享层，配置按服务自治并增加生产依赖边界审计。
 - [202608070731_repository_layout_refactor](../../history/2026-08/202608070731_repository_layout_refactor/) - 收敛平台包目录并新增统一工程检查入口。

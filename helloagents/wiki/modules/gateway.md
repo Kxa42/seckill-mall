@@ -15,6 +15,7 @@
 目标 gRPC 服务、etcd 或直连地址、OpenTelemetry、Prometheus；不读取业务 DSN，不配置 Commerce URL。
 
 ## 变更历史
+- [202608101524_project_quality_hardening](../../history/2026-08/202608101524_project_quality_hardening/) - 移除遗留 debug 登录配置字段（`jwt.expire`）与过时注释，同步 `gateway.yaml` 与示例配置；Gateway 改用 signal context、HTTP 有界停机，并在退出时显式关闭全部 gRPC 连接与 etcd 客户端。
 - [202608091438_fix_core_bugs](../../history/2026-08/202608091438_fix_core_bugs/) - 移除死代码：无路由挂载的 `JWTAuth` 中间件、Sentinel 限流（`SentinelLimit`/`initSentinel`）与可为任意 userID 签发旧格式 token 的 debug `POST /login` 路由；`stage4_routes_test.go` 改用无效 token 断言 401。
 - [202608070804_service_first_monorepo](../../history/2026-08/202608070804_service_first_monorepo/) - Gateway 入口、实现、middleware、OpenAPI 和配置收敛到服务自治目录。
 - [202608070731_repository_layout_refactor](../../history/2026-08/202608070731_repository_layout_refactor/) - 统一 Gateway 入口、实现目录与平台依赖边界。

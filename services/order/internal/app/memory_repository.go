@@ -47,7 +47,7 @@ func (r *MemoryRepository) FindByIdempotency(_ context.Context, userID uint64, k
 	return cloneOrder(order), true, nil
 }
 
-func (r *MemoryRepository) Create(_ context.Context, value Order) (Order, bool, error) {
+func (r *MemoryRepository) Create(ctx context.Context, value Order) (Order, bool, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	key := idempotencyKey(value.UserID, value.IdempotencyKey)
@@ -63,7 +63,7 @@ func (r *MemoryRepository) Create(_ context.Context, value Order) (Order, bool, 
 		if err != nil {
 			return Order{}, false, err
 		}
-		if err := r.eventSink.AppendEvent(context.Background(), event, nil); err != nil {
+		if err := r.eventSink.AppendEvent(ctx, event, nil); err != nil {
 			return Order{}, false, err
 		}
 	}
@@ -163,7 +163,7 @@ func (r *MemoryRepository) ListExpired(_ context.Context, now time.Time, limit i
 	return values, nil
 }
 
-func (r *MemoryRepository) Transition(_ context.Context, orderID string, userID uint64, target, reason, actorType string, actorID uint64, now time.Time) (Order, error) {
+func (r *MemoryRepository) Transition(ctx context.Context, orderID string, userID uint64, target, reason, actorType string, actorID uint64, now time.Time) (Order, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	value, ok := r.orders[orderID]
@@ -185,7 +185,7 @@ func (r *MemoryRepository) Transition(_ context.Context, orderID string, userID 
 		if err != nil {
 			return Order{}, err
 		}
-		if err := r.eventSink.AppendEvent(context.Background(), event, nil); err != nil {
+		if err := r.eventSink.AppendEvent(ctx, event, nil); err != nil {
 			return Order{}, err
 		}
 	}

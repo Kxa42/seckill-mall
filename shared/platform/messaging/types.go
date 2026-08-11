@@ -28,7 +28,8 @@ const (
 	DeadExchange    = "commerce.events.dlx.v1"
 )
 
-// OutboxEvent 是待发布的统一事件记录，Payload 必须是完整 EventEnvelope JSON。
+// OutboxEvent 是待发布的统一事件记录。
+// Payload 通常是业务 payload JSON，也兼容历史的完整 EventEnvelope JSON。
 type OutboxEvent struct {
 	ID            uint64
 	EventID       string
@@ -44,6 +45,30 @@ type OutboxEvent struct {
 	LastError     string
 	CreatedAt     time.Time
 	UpdatedAt     time.Time
+}
+
+// Envelope 将 Outbox 分列存储的元数据和业务 payload 重建为完整事件信封。
+// 旧记录若已把完整信封写入 Payload，则优先使用其中的 occurred_at 等字段。
+func (e OutboxEvent) Envelope() (contracts.EventEnvelope, error) {
+	if event, err := UnmarshalEnvelope(e.Payload); err == nil {
+		return event, nil
+	}
+	if !json.Valid(e.Payload) {
+		return contracts.EventEnvelope{}, errors.New("outbox payload must be valid JSON")
+	}
+	event := contracts.EventEnvelope{
+		EventID:       e.EventID,
+		EventType:     e.EventType,
+		EventVersion:  e.EventVersion,
+		AggregateType: e.AggregateType,
+		AggregateID:   e.AggregateID,
+		OccurredAt:    e.CreatedAt.UTC(),
+		Payload:       append(json.RawMessage(nil), e.Payload...),
+	}
+	if err := event.Validate(); err != nil {
+		return contracts.EventEnvelope{}, fmt.Errorf("rebuild outbox event envelope: %w", err)
+	}
+	return event, nil
 }
 
 // InboxClaim 描述消费者是否取得了某个事件的处理权。

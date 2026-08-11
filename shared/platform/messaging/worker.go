@@ -39,7 +39,7 @@ func publishOutboxBatch(ctx context.Context, store OutboxStore, publisher Publis
 	}
 	var firstErr error
 	for _, record := range events {
-		event, decodeErr := UnmarshalEnvelope(record.Payload)
+		event, decodeErr := record.Envelope()
 		if decodeErr != nil {
 			_ = store.MarkFailed(ctx, record.EventID, decodeErr.Error())
 			if firstErr == nil {

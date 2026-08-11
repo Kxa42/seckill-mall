@@ -61,9 +61,6 @@ func TestLoadServiceRuntimeConfigMapsGatewayDiscoveryWithoutBusinessSecrets(t *t
 	if cfg.MySQL.DSN != "" || cfg.MQ.URL != "" {
 		t.Fatalf("gateway must not inherit business service credentials: mysql=%q mq=%q", cfg.MySQL.DSN, cfg.MQ.URL)
 	}
-	if cfg.JWT.Expire != "24h" {
-		t.Fatalf("unexpected gateway jwt expire: %q", cfg.JWT.Expire)
-	}
 	if cfg.JWT.Secret != "" {
 		// jwt.secret uses ${SECKILL_JWT_SECRET}; test env does not set it, so it must fall back to empty.
 		t.Fatalf("gateway must fall back to empty jwt secret when env missing: %q", cfg.JWT.Secret)
@@ -345,7 +342,6 @@ gateway:
   metrics_port: "9090"
   mode: "debug"
   jwt:
-    expire: "24h"
     secret: "${SECKILL_JWT_SECRET}"
 `
 	if err := os.WriteFile(path, []byte(content), 0o600); err != nil {

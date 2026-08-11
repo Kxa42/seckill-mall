@@ -1,14 +1,18 @@
 // Package appkit 提供服务进程启动所需的通用脚手架：契约校验、etcd 注册、
-// gRPC 健康检查与优雅停机，供各业务服务入口统一调用。
+// gRPC/HTTP 服务启停与健康检查，供各业务服务入口统一调用。
 package appkit
 
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log"
 	"net"
+	"net/http"
 	"strings"
+	"time"
 
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/health"
 	"google.golang.org/grpc/health/grpc_health_v1"
@@ -16,6 +20,12 @@ import (
 	"seckill-mall/shared/contracts"
 	"seckill-mall/shared/platform/config"
 	"seckill-mall/shared/platform/discovery"
+)
+
+const (
+	// DefaultHTTPShutdownTimeout 限制 HTTP 服务等待在途请求的最长时间。
+	DefaultHTTPShutdownTimeout = 10 * time.Second
+	defaultReadHeaderTimeout   = 5 * time.Second
 )
 
 // ValidateContract 校验服务契约边界定义有效，校验失败时终止进程。
@@ -64,4 +74,84 @@ func ServeWithShutdown(ctx context.Context, server *grpc.Server, listener net.Li
 			log.Printf("grpc service graceful stop: %v", err)
 		}
 	}
+}
+
+// ServeHTTPWithShutdown 启动 HTTP 服务；ctx 取消时在限期内优雅停机，超时后强制关闭。
+func ServeHTTPWithShutdown(ctx context.Context, server *http.Server, shutdownTimeout time.Duration) error {
+	if server == nil {
+		return errors.New("http server is nil")
+	}
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	return serveHTTPWithShutdown(ctx, server, server.ListenAndServe, shutdownTimeout)
+}
+
+// StartMetricsServer 在独立 HTTP 服务上暴露 metrics，并跟随 ctx 有界退出。
+// 返回通道在服务退出时产生唯一结果；端口为空时通道立即关闭。
+func StartMetricsServer(ctx context.Context, port string) <-chan error {
+	done := make(chan error, 1)
+	port = strings.TrimSpace(port)
+	if port == "" {
+		close(done)
+		return done
+	}
+
+	addr := net.JoinHostPort("", port)
+	mux := http.NewServeMux()
+	mux.Handle("/metrics", promhttp.Handler())
+	server := &http.Server{
+		Addr:              addr,
+		Handler:           mux,
+		ReadHeaderTimeout: defaultReadHeaderTimeout,
+	}
+	go func() {
+		defer close(done)
+		log.Printf("metrics server started addr=%s", addr)
+		err := ServeHTTPWithShutdown(ctx, server, DefaultHTTPShutdownTimeout)
+		if err != nil {
+			log.Printf("metrics server stopped addr=%s err=%v", addr, err)
+		}
+		done <- err
+	}()
+	return done
+}
+
+func serveHTTPWithShutdown(
+	ctx context.Context,
+	server *http.Server,
+	serve func() error,
+	shutdownTimeout time.Duration,
+) error {
+	if shutdownTimeout <= 0 {
+		shutdownTimeout = DefaultHTTPShutdownTimeout
+	}
+
+	serveErr := make(chan error, 1)
+	go func() {
+		serveErr <- normalizeHTTPServerError(serve())
+	}()
+
+	select {
+	case err := <-serveErr:
+		return err
+	case <-ctx.Done():
+	}
+
+	shutdownCtx, cancel := context.WithTimeout(context.Background(), shutdownTimeout)
+	shutdownErr := server.Shutdown(shutdownCtx)
+	cancel()
+
+	var closeErr error
+	if shutdownErr != nil {
+		closeErr = normalizeHTTPServerError(server.Close())
+	}
+	return errors.Join(shutdownErr, closeErr, <-serveErr)
+}
+
+func normalizeHTTPServerError(err error) error {
+	if err == nil || errors.Is(err, http.ErrServerClosed) {
+		return nil
+	}
+	return fmt.Errorf("http server: %w", err)
 }
