@@ -7,6 +7,7 @@
 ## [Unreleased]
 
 ### 新增
+- 扩展 `docs/messaging-topology.md`：新增"交换机-队列绑定关系全景图"章节（事件视角的 10 类事件路由图、单消费者重试/死信回路图与绑定速查表）。
 - 新增 `docs/messaging-topology.md`：RabbitMQ 投递全景图（交换机/队列拓扑、事件级 fan-out、Outbox 发送侧与重试/DLQ 消费侧流程、参数速查与代码索引）。
 - 新增 `docs/redis-rabbitmq.md`：结合项目实现解读 Redis（Lua 库存状态机、Stream Outbox/Inbox）与 RabbitMQ（Outbox 模式、Publisher Confirm、重试/DLQ、幂等消费）及工业化设计要点。
 - 新增 `docs/architecture.md` 架构示意图：Mermaid 总体架构图、事件路由图、秒杀核心链路时序图，以及组件功能、gRPC 关联、数据所有权清单。

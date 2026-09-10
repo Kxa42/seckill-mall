@@ -51,7 +51,96 @@ flowchart LR
 routing key 就是事件类型本身；每个消费者拥有**独立主队列**，按订阅表绑定事件，
 实现一对多的广播投递（fan-out）。
 
-## 2. 事件级投递明细图（Fan-out）
+## 2. 交换机-队列绑定关系全景图
+
+系统共声明 **3 个交换机**；每个消费者对应 **3 个队列（主/重试/死信）**，但主队列之外的
+retry/dlq 只与"消费者名"绑定，不关心事件类型，因此下图聚焦**事件视角**：只展示主队列，
+突出每类事件的发布者与订阅去向。绑定关系由 `DeclareTopology` / `declareConsumerTopology`
+（`shared/platform/messaging/rabbit.go`）幂等声明，生产者和消费者启动时都会执行。
+
+```mermaid
+flowchart LR
+    subgraph PUB["发布者 → 事件（routing key = 事件类型）"]
+        direction TB
+        O1["order-service<br/>order.created.v1"]
+        O2["order-service<br/>order.cancelled.v1"]
+        P1["payment-service<br/>payment.succeeded.v1"]
+        P2["payment-service<br/>payment.refunded.v1"]
+        I1["inventory-service<br/>seckill.accepted.v1"]
+        I2["inventory-service<br/>inventory.reserved.v1"]
+        I3["inventory-service<br/>inventory.released.v1"]
+        I4["inventory-service<br/>inventory.restocked.v1"]
+        F1["fulfillment-service<br/>shipment.created.v1"]
+        F2["fulfillment-service<br/>shipment.delivered.v1"]
+    end
+
+    EX[("commerce.events.v1<br/>topic 交换机")]
+
+    subgraph CONS["消费者主队列"]
+        QO["commerce.order-service.events"]
+        QP["commerce.payment-service.events"]
+        QI["commerce.inventory-service.events"]
+        QF["commerce.fulfillment-service.events"]
+    end
+
+    O1 --> EX
+    O2 --> EX
+    P1 --> EX
+    P2 --> EX
+    I1 --> EX
+    I2 --> EX
+    I3 --> EX
+    I4 --> EX
+    F1 --> EX
+    F2 --> EX
+
+    EX -->|"seckill.accepted / payment.succeeded / payment.refunded<br/>inventory.reserved / inventory.released<br/>shipment.created / shipment.delivered"| QO
+    EX -->|"order.created / order.cancelled"| QP
+    EX -->|"order.cancelled / payment.refunded"| QI
+    EX -->|"payment.succeeded"| QF
+```
+
+**读图要点：**
+- **一事件一路由**：10 类事件各有一个 routing key（即事件类型本身），统一发往 `commerce.events.v1`；
+- **广播靠多绑定**：同一事件可同时绑定多个消费者主队列，例如 `payment.succeeded.v1` 同时投给 order 和 fulfillment；
+- **队列只与事件相关**：主队列与事件绑定；retry/dlq 队列只按"消费者名"绑定三个交换机中的另外两个（见 2.2 速查表）；
+- **重试/死信侧**：不关心事件类型——失败进 retry 队列 TTL 后转回主队列，超限 Nack 进 DLQ（见 2.1 回路图）。
+
+### 2.1 单消费者三件套回路（以 order-service 为例）
+
+```mermaid
+flowchart TD
+    EX["commerce.events.v1 (topic)"]
+    MAIN["commerce.order-service.events 主队列<br/>x-dead-letter-exchange: commerce.events.dlx.v1<br/>x-dead-letter-routing-key: order-service"]
+    CON["order-service 消费者<br/>Inbox 幂等 · 30s 租约 · 手动 Ack"]
+    RX["commerce.events.retry.v1 (direct)"]
+    RETRY["commerce.order-service.retry<br/>x-dead-letter-exchange: \"\"（默认交换机）<br/>x-dead-letter-routing-key: commerce.order-service.events<br/>消息 TTL = 指数退避 2s → 5min"]
+    DX["commerce.events.dlx.v1 (direct)"]
+    DLQ["commerce.order-service.dlq<br/>死信队列（终态）"]
+
+    EX -->|"绑定 7 类事件"| MAIN
+    MAIN -->|"投递"| CON
+    CON -->|"处理失败 且 attempts < 5"| RX
+    RX -->|"routing key = order-service"| RETRY
+    RETRY -.->|"TTL 过期 → 默认交换机 → 主队列"| MAIN
+    CON -->|"处理失败 且 attempts ≥ 5<br/>Nack(requeue=false)"| DX
+    DX -->|"routing key = order-service"| DLQ
+```
+
+### 2.2 绑定关系速查表
+
+| 交换机 | 类型 | 绑定队列 | routing key |
+|--------|------|---------|-------------|
+| `commerce.events.v1` | topic | 4 个主队列 | 事件类型（order 7 类 / payment 2 类 / inventory 2 类 / fulfillment 1 类） |
+| `commerce.events.retry.v1` | direct | 4 个 retry 队列 | 消费者名（`order-service` 等） |
+| `commerce.events.dlx.v1` | direct | 4 个 dlq 队列 | 消费者名 |
+
+**队列死信参数：**
+- 主队列：`x-dead-letter-exchange = commerce.events.dlx.v1`，`x-dead-letter-routing-key = <消费者名>`；
+- retry 队列：`x-dead-letter-exchange = ""`（默认交换机），`x-dead-letter-routing-key = <主队列完整名>`，
+  即 TTL 过期后按"队列名即 routing key"的默认交换机规则转回主队列。
+
+## 3. 事件级投递明细图（Fan-out）
 
 ```mermaid
 flowchart LR
@@ -95,7 +184,7 @@ flowchart LR
     B4 -. "无人订阅" .-> X
 ```
 
-## 3. 投放表（事件 → 发布者 → 消费者）
+## 4. 投放表（事件 → 发布者 → 消费者）
 
 | 事件类型 | 发布者 | 投递队列 | 消费者 | 处理器行为 |
 |---------|--------|---------|--------|-----------|
@@ -110,7 +199,7 @@ flowchart LR
 | `shipment.created.v1` | fulfillment-service | order.events | order-service | 记录已发货 |
 | `shipment.delivered.v1` | fulfillment-service | order.events | order-service | 记录已送达 |
 
-## 4. 消费者订阅矩阵（队列三件套）
+## 5. 消费者订阅矩阵（队列三件套）
 
 每个消费者有主队列 / retry 队列 / DLQ 队列三件套，主队列绑定 topic 交换机，
 retry 队列绑定 `commerce.events.retry.v1`（direct，routing key = 消费者名），
@@ -123,7 +212,7 @@ DLQ 队列绑定 `commerce.events.dlx.v1`（direct，routing key = 消费者名�
 | inventory-service | `commerce.inventory-service.events` | `.retry` | `.dlq` | order.cancelled、payment.refunded |
 | fulfillment-service | `commerce.fulfillment-service.events` | `.retry` | `.dlq` | payment.succeeded |
 
-## 5. 发送侧：Outbox 投递流程
+## 6. 发送侧：Outbox 投递流程
 
 ```mermaid
 flowchart LR
@@ -140,7 +229,7 @@ flowchart LR
 - Inventory：Redis Lua 在库存/秒杀状态变更的同一原子脚本中 `XADD` Stream Outbox，
   再由 `inventory-publisher` 消费组把 Stream 转发到 RabbitMQ（无 Redis 时用 MemoryEventStream）。
 
-## 6. 消费侧：幂等、重试与死信流程
+## 7. 消费侧：幂等、重试与死信流程
 
 ```mermaid
 flowchart TD
@@ -160,7 +249,7 @@ flowchart TD
 - retry 队列死信策略：`x-dead-letter-exchange = ""`（默认交换机）、routing key = 主队列名，
   即消息 TTL 过期后自动转回主队列再次消费。
 
-## 7. 关键参数速查
+## 8. 关键参数速查
 
 | 参数 | 值 |
 |------|-----|
@@ -178,14 +267,14 @@ flowchart TD
 | 投递语义 | at-least-once + Inbox 幂等收敛 |
 | 事件版本 | v1（EventVersion > 1 安全 Ack 丢弃） |
 
-## 8. 已知边界（如实标注）
+## 9. 已知边界（如实标注）
 
 - `inventory.restocked.v1` 已发布但**无任何消费者订阅**，属于"记录型"事件。
 - order-service 对 `seckill.accepted.v1`、`inventory.reserved.v1`、`inventory.released.v1`
   的 Handler 为 no-op（返回 nil 直接 Ack），不产生业务副作用。
 - 不保证跨事件类型的全局顺序，正确性依赖状态机校验与幂等收敛。
 
-## 9. 代码索引
+## 10. 代码索引
 
 | 内容 | 位置 |
 |------|------|
